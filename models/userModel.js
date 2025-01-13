@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const userSchema = new mongoose.Schema({
     firstName : {
         type : String,
@@ -43,6 +44,17 @@ const userSchema = new mongoose.Schema({
         type : Boolean,
         default : false
     },
+
+    lockUntil: {
+        type: Number,
+    },
+
+    loginAttempts: {
+        type: Number,
+        default: 0,
+    },
+
+
     profilePicture : {
         type : String,
        
@@ -50,7 +62,9 @@ const userSchema = new mongoose.Schema({
     fromGoogle: {
         type: Boolean,
         default: false,
-      },
+    },
+
+
     
 
 })

@@ -4,7 +4,7 @@ const Database = require('./database/database');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const fileUpload = require('express-fileupload');
-const axios = require('axios'); // Added Axios import
+const axios = require('axios');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
@@ -14,16 +14,23 @@ const app = express();
 
 // CORS Configuration
 const corsOptions = {
-    origin: 'https://localhost:5000',
+    origin: process.env.FRONTEND_URL || "*",
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+        "Origin",
+        "X-Requested-With",
+        "Content-Type",
+        "Accept",
+        "Authorization",
+        "x-csrf-token",
+    ],
 };
 app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(fileUpload());
-app.use(express.static('./public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Database Connection
 Database();
@@ -38,8 +45,9 @@ app.use('/api/favourite', require('./routes/favouritesRoutes'));
 app.use('/api/khalti', require('./routes/paymentRoutes'));
 
 // Test SSL Endpoint
-app.get('/gadgetshub', (req, res) => {
+app.get('/', (req, res) => {
     res.send('Hello gadgetshub from SSL server');
+    console.log('Hello gadgetshub from SSL server');
 });
 
 // Khalti Payment Route
@@ -69,17 +77,16 @@ app.post('/khalti-api', async (req, res) => {
     }
 });
 
-// Load SSL Certificates
-const key = fs.readFileSync('./localhost.key');
-const cert = fs.readFileSync('./localhost.crt');
+const options = {
+    key: fs.readFileSync(path.resolve(__dirname, 'localhost.key')),
+    cert: fs.readFileSync(path.resolve(__dirname, 'localhost.crt')),
+};
 
-// Create HTTPS Server
-const server = https.createServer({ key, cert }, app);
-
-// Start Server
+// Start HTTPS Server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '127.0.0.1', () => {
-    console.log(`Server is running on https://localhost:${PORT}`);
+
+https.createServer(options, app).listen(PORT, () => {
+    console.log(`Secure server is running on https://localhost:${PORT}`);
 });
 
 module.exports = app;

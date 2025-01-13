@@ -83,53 +83,78 @@ const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-      return res.status(400).json({
-          success: false,
-          message: 'Please enter all the fields'
-      });
+    return res.status(400).json({
+      success: false,
+      message: 'Please enter all the fields',
+    });
   }
 
   try {
-      const user = await userModel.findOne({ email: email });
+    const user = await userModel.findOne({ email: email });
 
-      if (!user) {
-          return res.status(400).json({
-              success: false,
-              message: "Email Doesn't Exist !"
-          });
-      }
-
-      const isValidPassword = await bcrypt.compare(password, user.password);
-
-      if (!isValidPassword) {
-          return res.status(400).json({
-              success: false,
-              message: "Password Doesn't Match !"
-          });
-      }
-
-      const token = await jwt.sign(
-          {
-              id: user._id, isAdmin: user.isAdmin
-          },
-          process.env.JWT_SECRET
-      );
-
-      return res.status(200).json({
-          success: true,
-          message: 'User Logged in Successfully!',
-          token: token,
-          userData: user
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Email Doesn't Exist!",
       });
+    }
 
+    // Check if the user is currently locked out
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Account is temporarily locked. Please try again later.',
+      });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
+      // Increment failed login attempts
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+
+      // Lock account if attempts exceed 3
+      if (user.loginAttempts >= 3) {
+        user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
+        user.loginAttempts = 0; // Reset attempts after lock
+      }
+
+      await user.save();
+
+      return res.status(400).json({
+        success: false,
+        message: "Password Doesn't Match!",
+      });
+    }
+
+    // Reset login attempts on successful login
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    await user.save();
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        isAdmin: user.isAdmin,
+      },
+      process.env.JWT_SECRET
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'User Logged in Successfully!',
+      token: token,
+      userData: user,
+    });
   } catch (error) {
-      console.log(error);
-      return res.status(500).json({
-          success: false,
-          message: 'Internal Server Error'
-      });
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+    });
   }
-}
+};
+
 
 const getCurrentUser = async (req, res) => {
     try {
@@ -548,6 +573,7 @@ module.exports = {
     uploadProfilePicture,
     editUserProfile,
     googleLogin,
-    getUserByGoogleEmail
+    getUserByGoogleEmail,
+    
 
 }
