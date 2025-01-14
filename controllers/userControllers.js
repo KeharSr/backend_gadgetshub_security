@@ -10,6 +10,7 @@ const fs = require('fs');
 const {OAuth2Client} = require('google-auth-library');
 const axios = require('axios'); 
 const client=new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+const { sendOtpEmail, generateOtp } = require('../service/authentication');
 
 const createUser = async (req, res) => {
   console.log(req.body);
