@@ -1,6 +1,8 @@
 // import jwt
 const userModel = require('../models/userModel');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
+const httpStatus = require('http-status-codes');
 const authGuard= async (req, res, next) => {
     //check incoming data
     console.log(req.headers); // passed going to next
@@ -114,44 +116,44 @@ const adminGuard= (req, res, next) => {
 }
 
 const verifyRecaptcha = async (req, res, next) => {
-    console.log(req.body)
-    const recaptchaResponse = req.body['recaptchaToken']; 
+    console.log("reCAPTCHA Token: ", req.body.recaptchaToken); // Log the token
   
-  
+    const recaptchaResponse = req.body['recaptchaToken'];
     if (!recaptchaResponse) {
       return res.status(httpStatus.BAD_REQUEST).json({
         success: false,
-        message: 'reCAPTCHA response is required'
+        message: 'reCAPTCHA response is required',
       });
     }
   
     try {
-      const secretKey = process.env.RECAPTCHA_SECRET_KEY; 
+      const secretKey = process.env.RECAPTCHA_SECRET_KEY;
       const response = await axios.post(`https://www.google.com/recaptcha/api/siteverify`, null, {
         params: {
           secret: secretKey,
-          response: recaptchaResponse
-        }
+          response: recaptchaResponse,
+        },
       });
   
       const data = response.data;
-      console.log(data)
+      console.log("reCAPTCHA Verification Response:", data); // Log verification result
       if (data.success) {
-        next(); 
+        next();
       } else {
         res.status(httpStatus.UNAUTHORIZED).json({
           success: false,
-          message: 'reCAPTCHA verification failed'
+          message: 'reCAPTCHA verification failed',
         });
       }
     } catch (error) {
       console.error('Error verifying reCAPTCHA:', error);
       res.status(httpStatus.INTERNAL_SERVER_ERROR).json({
         success: false,
-        message: 'Error verifying reCAPTCHA'
+        message: 'Error verifying reCAPTCHA',
       });
     }
   };
+  
 
 module.exports = {
     authGuard,
