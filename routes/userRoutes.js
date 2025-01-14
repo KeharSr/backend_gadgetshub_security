@@ -9,6 +9,10 @@ router.post('/create', userController.createUser)
 
 router.post('/login', userController.loginUser)
 
+router.post('/verify-email', userController.verifyEmail)
+
+router.post('/resend-login-otp', userController.resendLoginOTP);
+
 // current user
 router.get('/current', userController.getCurrentUser)
 

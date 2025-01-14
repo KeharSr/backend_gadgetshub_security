@@ -10,7 +10,7 @@ const fs = require('fs');
 const {OAuth2Client} = require('google-auth-library');
 const axios = require('axios'); 
 const client=new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
-const { sendOtpEmail, generateOtp } = require('../service/authentication');
+const {sendVerificationEmail,sendLoginOTP} = require("../service/authentication"); 
 
 const createUser = async (req, res) => {
   console.log(req.body);
@@ -53,20 +53,38 @@ const createUser = async (req, res) => {
       const randomSalt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, randomSalt);
 
+      //Generate OTP 
+      const otp = Math.floor(100000 + Math.random() * 900000);
+      // generate expiry time for OTP
+      const otpExpiry = Date.now() + 10 * 60 * 1000;
+
       const newUser = new userModel({
           firstName: firstName,
           lastName: lastName,
           userName: userName,
           email: email,
           phoneNumber: phoneNumber,
-          password: hashedPassword
+          password: hashedPassword,
+          verificationOTP: otp,
+          otpExpires: otpExpiry,
+          isVerified: false
       });
 
       await newUser.save();
 
+      // Send verification email
+      const emailSent = await sendVerificationEmail(email, otp);
+
+      if (!emailSent) {
+          return res.status(500).json({
+              success: false,
+              message: 'Error sending verification email'
+          });
+      }
+
       res.status(201).json({
           success: true,
-          message: 'User created successfully'
+          message: 'User created successfully.Please check your email for verification OTP'
       });
 
   } catch (error) {
@@ -79,80 +97,202 @@ const createUser = async (req, res) => {
 }
 
 const loginUser = async (req, res) => {
-  console.log(req.body);
-
-  const { email, password } = req.body;
+  const { email, password, otp } = req.body;
 
   if (!email || !password) {
-    return res.status(400).json({
-      success: false,
-      message: 'Please enter all the fields',
-    });
+      return res.status(400).json({
+          success: false,
+          message: 'Please enter all the fields'
+      });
   }
 
   try {
-    const user = await userModel.findOne({ email: email });
+      const user = await userModel.findOne({ email: email });
 
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Email Doesn't Exist!",
-      });
-    }
-
-    // Check if the user is currently locked out
-    if (user.lockUntil && user.lockUntil > Date.now()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Account is temporarily locked. Please try again later.',
-      });
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.password);
-
-    if (!isValidPassword) {
-      // Increment failed login attempts
-      user.loginAttempts = (user.loginAttempts || 0) + 1;
-
-      // Lock account if attempts exceed 3
-      if (user.loginAttempts >= 3) {
-        user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
-        user.loginAttempts = 0; // Reset attempts after lock
+      if (!user) {
+          return res.status(400).json({
+              success: false,
+              message: "Email Doesn't Exist!"
+          });
       }
 
+      // Check if email is verified
+      if (!user.isVerified) {
+          return res.status(403).json({
+              success: false,
+              message: 'Please verify your email first'
+          });
+      }
+
+      // Check if user is locked
+      if (user.lockUntil && user.lockUntil > Date.now()) {
+          return res.status(403).json({
+              success: false,
+              message: 'Account is temporarily locked. Please try again later.'
+          });
+      }
+
+      const isValidPassword = await bcrypt.compare(password, user.password);
+
+      if (!isValidPassword) {
+          // Increment failed login attempts
+          user.loginAttempts = (user.loginAttempts || 0) + 1;
+
+          if (user.loginAttempts >= 3) {
+              user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
+              user.loginAttempts = 0;
+          }
+
+          await user.save();
+
+          return res.status(400).json({
+              success: false,
+              message: "Password Doesn't Match!"
+          });
+      }
+
+      // If OTP is not provided, generate and send new OTP
+      if (!otp) {
+          const loginOTP = Math.floor(100000 + Math.random() * 900000);
+          const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+
+          user.loginOTP = loginOTP;
+          user.loginOTPExpires = otpExpiry;
+          await user.save();
+
+          // Send OTP email
+          const emailSent = await sendLoginOTP(email, loginOTP);
+
+          if (!emailSent) {
+              return res.status(500).json({
+                  success: false,
+                  message: 'Failed to send OTP'
+              });
+          }
+
+          return res.status(200).json({
+              success: true,
+              message: 'OTP sent to your email',
+              requireOTP: true
+          });
+      }
+
+      // Verify OTP
+      if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
+          return res.status(400).json({
+              success: false,
+              message: 'Invalid or expired OTP'
+          });
+      }
+
+      // Reset login attempts and clear OTP
+      user.loginAttempts = 0;
+      user.lockUntil = undefined;
+      user.loginOTP = null;
+      user.loginOTPExpires = null;
       await user.save();
 
-      return res.status(400).json({
-        success: false,
-        message: "Password Doesn't Match!",
+      const token = jwt.sign(
+          {
+              id: user._id,
+              isAdmin: user.isAdmin,
+          },
+          process.env.JWT_SECRET
+      );
+
+      return res.status(200).json({
+          success: true,
+          message: 'User Logged in Successfully!',
+          token: token,
+          userData: user,
       });
-    }
 
-    // Reset login attempts on successful login
-    user.loginAttempts = 0;
-    user.lockUntil = undefined;
-    await user.save();
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        isAdmin: user.isAdmin,
-      },
-      process.env.JWT_SECRET
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: 'User Logged in Successfully!',
-      token: token,
-      userData: user,
-    });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal Server Error',
-    });
+      console.log(error);
+      return res.status(500).json({
+          success: false,
+          message: 'Internal Server Error'
+      });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+      const user = await userModel.findOne({ 
+          email,
+          verificationOTP: otp,
+          otpExpires: { $gt: Date.now() }
+      });
+
+      if (!user) {
+          return res.status(400).json({
+              success: false,
+              message: 'Invalid or expired OTP'
+          });
+      }
+
+      // Update user verification status
+      user.isVerified = true;
+      user.verificationOTP = null;
+      user.otpExpires = null;
+      await user.save();
+
+      res.status(200).json({
+          success: true,
+          message: 'Email verified successfully'
+      });
+
+  } catch (error) {
+      console.log(error);
+      res.status(500).json({
+          success: false,
+          message: 'Internal Server Error'
+      });
+  }
+};
+
+const resendLoginOTP = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+      const user = await userModel.findOne({ email });
+      
+      if (!user) {
+          return res.status(400).json({
+              success: false,
+              message: 'User not found'
+          });
+      }
+
+      const loginOTP = Math.floor(100000 + Math.random() * 900000);
+      const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+      user.loginOTP = loginOTP;
+      user.loginOTPExpires = otpExpiry;
+      await user.save();
+
+      const emailSent = await sendLoginOTP(email, loginOTP);
+
+      if (!emailSent) {
+          return res.status(500).json({
+              success: false,
+              message: 'Failed to send OTP'
+          });
+      }
+
+      res.status(200).json({
+          success: true,
+          message: 'OTP resent successfully'
+      });
+
+  } catch (error) {
+      console.log(error);
+      res.status(500).json({
+          success: false,
+          message: 'Internal Server Error'
+      });
   }
 };
 
@@ -575,6 +715,8 @@ module.exports = {
     editUserProfile,
     googleLogin,
     getUserByGoogleEmail,
+    verifyEmail,
+    resendLoginOTP
     
 
 }
