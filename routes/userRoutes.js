@@ -1,13 +1,13 @@
 const router = require('express').Router();
 const userController = require('../controllers/userControllers')
-const { authGuard } = require('../middleware/authGuard');
+const { authGuard,verifyRecaptcha } = require('../middleware/authGuard');
 
 
 
 router.post('/create', userController.createUser)
 
 
-router.post('/login', userController.loginUser)
+router.post('/login',verifyRecaptcha, userController.loginUser)
 
 router.post('/verify-email', userController.verifyEmail)
 
