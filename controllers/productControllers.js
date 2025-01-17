@@ -14,18 +14,39 @@ const createProduct = async (req, res) => {
     productQuantity,
   } = req.body;
 
+  // Validate required fields
   if (
-    (!productName || !productPrice || !productCategory || !productDescription,
-    !productQuantity)
+    !productName ||
+    !productPrice ||
+    !productCategory ||
+    !productDescription ||
+    !productQuantity
   ) {
     return res.status(400).json({
       success: false,
       message: "Please enter all details!",
     });
   }
-  var imageName = null;
+
+  // Validate price and quantity
+  if (productPrice < 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Product price cannot be negative!",
+    });
+  }
+
+  if (productQuantity < 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Product quantity cannot be negative!",
+    });
+  }
+
+  let imageName = null;
 
   try {
+    // Handle image upload
     if (req.files && req.files.productImage) {
       const { productImage } = req.files;
       imageName = `${Date.now()}_${productImage.name}`;
@@ -33,6 +54,7 @@ const createProduct = async (req, res) => {
       await productImage.mv(imagePath);
     }
 
+    // Create a new product
     const newProduct = new productModel({
       productName: productName,
       productPrice: productPrice,
@@ -40,10 +62,9 @@ const createProduct = async (req, res) => {
       productDescription: productDescription,
       productImage: imageName,
       productQuantity: productQuantity,
-
-      // Save the path of the image
     });
 
+    // Save product to database
     await newProduct.save();
 
     res.status(201).json({
@@ -129,52 +150,62 @@ const getAllProducts = async (req, res) => {
 // update product
 const updateProduct = async (req, res) => {
   try {
-    // if there is image
+    // Validate productPrice and productQuantity in req.body
+    const { productPrice, productQuantity } = req.body;
+
+    if (productPrice !== undefined && productPrice < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Product price cannot be negative!",
+      });
+    }
+
+    if (productQuantity !== undefined && productQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Product quantity cannot be negative!",
+      });
+    }
+
+    // If there is an image, process it
     if (req.files && req.files.productImage) {
-      //destructing
       const { productImage } = req.files;
 
-      //upload image to directory(/public/products folder)
+      // Upload image to directory (/public/products folder)
       const imageName = `${Date.now()}-${productImage.name}`;
-
-      //2. make an upload path (/path/upload- directory)
       const imageUploadPath = path.join(
         __dirname,
         `../public/products/${imageName}`
       );
 
-      //move the folder
+      // Move the image to the upload path
       await productImage.mv(imageUploadPath);
 
-      //req.params(id), rq.body(updated data +pn,pp,pc,pd), req.files(image)
-      //add new field to the req.body(productImage->imageName)
-      req.body.productImage = imageName; //image uploaded (generated name)
+      // Add the new image name to req.body
+      req.body.productImage = imageName;
 
-      // if image is uploaded, and req.body is assigned
-      if (req.body.productImage) {
-        //find the product
-        const existingProduct = await productModel.findById(req.params.id);
-
-        //Searching in the directory folder
+      // Delete the old image if it exists
+      const existingProduct = await productModel.findById(req.params.id);
+      if (existingProduct && existingProduct.productImage) {
         const oldImagePath = path.join(
           __dirname,
           `../public/products/${existingProduct.productImage}`
         );
-
-        // delete from file system
         fs.unlinkSync(oldImagePath);
       }
     }
-    //update the data
-    const updateProduct = await productModel.findByIdAndUpdate(
+
+    // Update the product in the database
+    const updatedProduct = await productModel.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true }
     );
+
     res.status(200).json({
       success: true,
       message: "Product updated successfully",
-      data: updateProduct,
+      data: updatedProduct,
     });
   } catch (error) {
     console.log(error);
@@ -229,7 +260,7 @@ const paginatonProducts = async (req, res) => {
 const getProductsByCategory = async (req, res) => {
   const category = req.query.category || "All";
   const search = req.query.search || "";
-  
+
   console.log(category);
 
   const pageNo = parseInt(req.query.page || 1);

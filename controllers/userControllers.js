@@ -326,38 +326,47 @@ const getCurrentUser = async (req, res) => {
 }
 
 const getToken = async (req, res) => {
-    try {
-      console.log(req.body);
-      const { id } = req.body;
-   
-      const user = await userModel.findById(id);
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message: 'User not found',
-        });
-      }
-   
-      const token = await jwt.sign(
-            {
-                id : user._id, isAdmin : user.isAdmin},
-                process.env.JWT_SECRET
-      );
-   
-      return res.status(200).json({
-        success: true,
-        message: 'Token generated successfully!',
-        token: token,
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).json({
+  try {
+    console.log(req.body);
+    const { id } = req.body;
+
+    // Find the user by ID
+    const user = await userModel.findById(id);
+    if (!user) {
+      return res.status(400).json({
         success: false,
-        message: 'Internal Server Error',
-        error: error,
+        message: 'User not found',
       });
     }
-  };
+
+    // Check if the user is an admin
+    if (user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admins are not allowed to generate tokens for this endpoint.',
+      });
+    }
+
+    // Generate the token for non-admin users
+    const token = await jwt.sign(
+      { id: user._id, isAdmin: user.isAdmin },
+      process.env.JWT_SECRET
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Token generated successfully!',
+      token: token,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal Server Error',
+      error: error,
+    });
+  }
+};
 
   const forgotPassword = async (req, res) => {
     const { phoneNumber} = req.body;
