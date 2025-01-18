@@ -1,6 +1,6 @@
 const router = require("express").Router();
 
-const paymentController = require("../controllers/paymentController");
+const paymentController = require("../controllers/paymentControllers");
 
 router.post("/initialize-khalti", paymentController.initializePayment);
 router.get("/complete-khalti-payment", paymentController.completeKhaltiPayment);

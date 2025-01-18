@@ -7,12 +7,10 @@ const OrderModel = require("../models/orderModel");
 
 // Route to initialize Khalti payment gateway
 const initializePayment = async (req, res) => {
-  console.log(req.body);
-
   try {
     const { orderId, totalPrice, website_url } = req.body;
 
-    // Find the order and populate the products field
+    // Find the order and populate carts with product details
     const itemData = await OrderModel.findOne({
       _id: orderId,
       totalPrice: Number(totalPrice),
@@ -27,65 +25,70 @@ const initializePayment = async (req, res) => {
       });
 
     if (!itemData) {
-      return res.send({
+      return res.status(404).json({
         success: false,
         message: "Order not found",
       });
     }
-    console.log(itemData.carts);
-    // Extract product names from populated products array
+
+    // Extract product names
     const productNames = itemData.carts
       .map((p) => p.productId.productName)
       .join(", ");
 
     if (!productNames) {
-      return res.send({
+      return res.status(400).json({
         success: false,
         message: "No product names found",
       });
     }
 
-    // Create a payment document without transactionId initially
+    // Create payment record
     const OrderModelData = await Payment.create({
       orderId: orderId,
       paymentGateway: "khalti",
       amount: totalPrice,
-      status: "pending", // Set the initial status to pending
+      status: "pending",
     });
 
-    // Initialize the Khalti payment
-    const paymentInitate = await initializeKhaltiPayment({
-      amount: totalPrice * 100, // amount should be in paisa (Rs * 100)
-      purchase_order_id: OrderModelData._id, // purchase_order_id because we need to verify it later
+    // Convert amount to paisa (NPR to paisa)
+    const amountInPaisa = Math.round(totalPrice * 100);
+
+    // Call Khalti's API to initialize payment
+    const paymentResponse = await initializeKhaltiPayment({
+      amount: amountInPaisa,
+      purchase_order_id: OrderModelData._id.toString(),
       purchase_order_name: productNames,
-      return_url: `${process.env.BACKEND_URI}/api/khalti/complete-khalti-payment`,
-      website_url: website_url || "http://localhost:3000",
+      return_url: `${process.env.BACKEND_URL}/api/khalti/complete-khalti-payment`,
+      website_url: website_url || "https://yourdomain.com", // Replace with your public domain
     });
 
-    // Update the payment record with the transactionId and pidx
+    // Update payment record with pidx
     await Payment.updateOne(
       { _id: OrderModelData._id },
       {
         $set: {
-          transactionId: paymentInitate.pidx, // Assuming pidx as transactionId from Khalti response
-          pidx: paymentInitate.pidx,
+          transactionId: paymentResponse.pidx,
+          pidx: paymentResponse.pidx,
         },
       }
     );
 
-    res.json({
+    res.status(200).json({
       success: true,
       OrderModelData,
-      payment: paymentInitate,
-      pidx: paymentInitate.pidx,
+      payment: paymentResponse,
+      pidx: paymentResponse.pidx,
     });
   } catch (error) {
-    res.json({
+    console.error("Error initializing payment:", error);
+    res.status(500).json({
       success: false,
       error: error.message || "An error occurred",
     });
   }
 };
+
 
 // This is our return URL where we verify the payment done by the user
 const completeKhaltiPayment = async (req, res) => {
