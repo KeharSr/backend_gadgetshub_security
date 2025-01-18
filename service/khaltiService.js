@@ -28,7 +28,7 @@ async function verifyKhaltiPayment(pidx) {
 // Function to initialize Khalti Payment
 async function initializeKhaltiPayment(details) {
   const headersList = {
-    Authorization: `Key ${process.env.KHALTI_SECRET_KEY}`,
+    Authorization: `key ${process.env.KHALTI_SECRET_KEY}`,
     "Content-Type": "application/json",
   };
 
