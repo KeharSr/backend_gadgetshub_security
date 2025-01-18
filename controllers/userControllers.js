@@ -216,6 +216,58 @@ const loginUser = async (req, res) => {
   }
 };
 
+// verifyloginOTP
+const verifyLoginOTP = async (req, res) => {
+  const { email, otp } = req.body;
+
+  try {
+      const user
+          = 
+          await userModel.findOne({
+              email,
+              loginOTP: otp,
+              loginOTPExpires: { $gt: Date.now() }
+          });
+
+      if (!user) {
+          return res.status(400).json({
+              success: false,
+              message: 'Invalid or expired OTP'
+          });
+      }
+
+      // Reset login attempts and clear OTP
+      user.loginAttempts = 0;
+      user.lockUntil = undefined;
+      user.loginOTP = null;
+      user.loginOTPExpires = null;
+      await user.save();
+
+      const token = jwt.sign(
+          {
+              id: user._id,
+              isAdmin: user.isAdmin,
+          },
+          process.env.JWT_SECRET
+      );
+
+      res.status(200).json({
+          success: true,
+          message: 'User Logged in Successfully!',
+          token: token,
+          userData: user,
+      });
+
+  } catch (error) {
+      console.log(error);
+      res.status(500).json({
+          success: false,
+          message: 'Internal Server Error'
+      });
+  }
+};
+
+
 const verifyEmail = async (req, res) => {
   const { email, otp } = req.body;
 
@@ -296,34 +348,43 @@ const resendLoginOTP = async (req, res) => {
   }
 };
 
-
 const getCurrentUser = async (req, res) => {
-    try {
-        const token = req.headers.authorization.split(" ")[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await userModel.findById(decoded.id).select('-password'); // Do not return the password
+  try {
+      const token = req.headers.authorization?.split(" ")[1];
 
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found!'
-            });
-        }
+      if (!token) {
+          return res.status(401).json({
+              success: false,
+              message: "Authentication token missing",
+          });
+      }
 
-        res.status(200).json({
-            success: true,
-            message: 'User found!',
-            user: user
-        });
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await userModel.findById(decoded.id).select("-password"); // Do not return the password
 
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error'
-        });
-    }
-}
+      if (!user) {
+          return res.status(404).json({
+              success: false,
+              message: "User not found!",
+          });
+      }
+
+      // Respond with user profile
+      return res.status(200).json({
+          success: true,
+          message: "User profile retrieved successfully",
+          user: user,
+      });
+  } catch (error) {
+      console.error("Error in getCurrentUser:", error);
+      return res.status(500).json({
+          success: false,
+          message: "Internal server error",
+      });
+  }
+};
+
+
 
 const getToken = async (req, res) => {
   try {
@@ -712,6 +773,33 @@ const getUserByGoogleEmail = async (req, res) => {
     });
   }
 };
+
+const checkAdmin = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return res.status(401).json({ message: "Authentication token missing" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.isAdmin) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    return res.status(200).json({ isAdmin: true });
+  } catch (error) {
+    console.error("Error in checkAdmin controller:", error.message);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
   
 module.exports = {
     createUser,
@@ -725,7 +813,9 @@ module.exports = {
     googleLogin,
     getUserByGoogleEmail,
     verifyEmail,
-    resendLoginOTP
+    resendLoginOTP,
+    verifyLoginOTP,
+    checkAdmin
     
 
 }

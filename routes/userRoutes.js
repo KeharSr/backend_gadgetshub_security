@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const userController = require('../controllers/userControllers')
-const { authGuard,verifyRecaptcha } = require('../middleware/authGuard');
+const { authGuard,verifyRecaptcha, adminGuard } = require('../middleware/authGuard');
 
 
 
@@ -8,6 +8,9 @@ router.post('/create', userController.createUser)
 
 
 router.post('/login',verifyRecaptcha, userController.loginUser)
+
+// verify login otp
+router.post('/verify-login-otp', userController.verifyLoginOTP)
 
 router.post('/verify-email', userController.verifyEmail)
 
@@ -33,5 +36,7 @@ router.put('/update',authGuard, userController.editUserProfile);
 // route to handle password reset
 router.post('/google', userController.googleLogin);
 router.post('/getGoogleUser', userController.getUserByGoogleEmail);
+
+router.get("/check-admin", adminGuard, userController.checkAdmin);
 
 module.exports = router
