@@ -70,10 +70,16 @@ app.post("/khalti-api", async (req, res) => {
         },
       }
     );
-    res.send({
+    if(khaltiResponse.data){res.send({
       success: true,
       data: khaltiResponse.data,
     });
+  }else{
+    res.send({
+      success: false,
+      message: "Error in initiating",
+    });
+  }
   } catch (error) {
     console.error("Error initiating Khalti payment:", error.message);
     res.status(500).send({
