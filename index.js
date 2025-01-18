@@ -70,18 +70,23 @@ app.post("/khalti-api", async (req, res) => {
         },
       }
     );
-    if(khaltiResponse.data){res.send({
-      success: true,
-      data: khaltiResponse.data,
-    });
-  }else{
-    res.send({
-      success: false,
-      message: "Error in initiating",
-    });
-  }
+
+    if (khaltiResponse.data) {
+      res.send({
+        success: true,
+        data: khaltiResponse.data,
+      });
+    } else {
+      res.send({
+        success: false,
+        message: "Error in initiating",
+      });
+    }
   } catch (error) {
-    console.error("Error initiating Khalti payment:", error.message);
+    console.error(
+      "Error initiating Khalti payment:",
+      error.response ? error.response.data : error.message
+    );
     res.status(500).send({
       success: false,
       message: "Error in initiating",
