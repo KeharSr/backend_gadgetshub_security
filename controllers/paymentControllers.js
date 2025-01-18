@@ -141,8 +141,9 @@ const completeKhaltiPayment = async (req, res) => {
       { new: true }
     );
 
-    // Redirect to Khalti or return success response
-    res.redirect(`${process.env.KHALTI_REDIRECT_URL}?pidx=${hashedPidx}`);
+    // Redirect to your custom success page
+    const successPageUrl = `${process.env.FRONTEND_URL}/payment-success?pidx=${hashedPidx}&orderId=${purchase_order_id}`;
+    res.redirect(successPageUrl);
   } catch (error) {
     console.error("Error verifying payment:", error);
     res.status(500).json({
@@ -152,6 +153,7 @@ const completeKhaltiPayment = async (req, res) => {
     });
   }
 };
+
 
 // Route to verify Khalti payment (used for debugging or manual verification)
 const verifyKhalti = async (req, res) => {
