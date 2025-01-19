@@ -96,8 +96,8 @@ app.post("/khalti-api", async (req, res) => {
 });
 
 const options = {
-  key: fs.readFileSync(path.resolve(__dirname, "localhost.key")),
-  cert: fs.readFileSync(path.resolve(__dirname, "localhost.crt")),
+  key: fs.readFileSync(path.resolve(__dirname, "server.key")),
+  cert: fs.readFileSync(path.resolve(__dirname, "server.crt")),
 };
 
 // Start HTTPS Server
