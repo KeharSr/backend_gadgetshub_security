@@ -102,7 +102,7 @@ const loginUser = async (req, res) => {
   if (!email || !password) {
       return res.status(400).json({
           success: false,
-          message: 'Please enter all the fields'
+          message: 'Please enter all the fields',
       });
   }
 
@@ -112,7 +112,7 @@ const loginUser = async (req, res) => {
       if (!user) {
           return res.status(400).json({
               success: false,
-              message: "Email Doesn't Exist!"
+              message: "Email Doesn't Exist!",
           });
       }
 
@@ -120,7 +120,7 @@ const loginUser = async (req, res) => {
       if (!user.isVerified) {
           return res.status(403).json({
               success: false,
-              message: 'Please verify your email first'
+              message: 'Please verify your email first',
           });
       }
 
@@ -128,7 +128,7 @@ const loginUser = async (req, res) => {
       if (user.lockUntil && user.lockUntil > Date.now()) {
           return res.status(403).json({
               success: false,
-              message: 'Account is temporarily locked. Please try again later.'
+              message: 'Account is temporarily locked. Please try again later.',
           });
       }
 
@@ -147,7 +147,7 @@ const loginUser = async (req, res) => {
 
           return res.status(400).json({
               success: false,
-              message: "Password Doesn't Match!"
+              message: "Password Doesn't Match!",
           });
       }
 
@@ -166,14 +166,14 @@ const loginUser = async (req, res) => {
           if (!emailSent) {
               return res.status(500).json({
                   success: false,
-                  message: 'Failed to send OTP'
+                  message: 'Failed to send OTP',
               });
           }
 
           return res.status(200).json({
               success: true,
               message: 'OTP sent to your email',
-              requireOTP: true
+              requireOTP: true,
           });
       }
 
@@ -181,7 +181,7 @@ const loginUser = async (req, res) => {
       if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
           return res.status(400).json({
               success: false,
-              message: 'Invalid or expired OTP'
+              message: 'Invalid or expired OTP',
           });
       }
 
@@ -192,29 +192,36 @@ const loginUser = async (req, res) => {
       user.loginOTPExpires = null;
       await user.save();
 
-      const token = jwt.sign(
-          {
-              id: user._id,
-              // isAdmin: user.isAdmin,
-          },
-          process.env.JWT_SECRET
-      );
+      // Create a clean JWT payload (exclude isAdmin)
+      const tokenPayload = {
+          id: user._id, // Include only necessary fields
+          email: user.email,
+          name: user.name, // Optional
+      };
+
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
 
       return res.status(200).json({
           success: true,
           message: 'User Logged in Successfully!',
           token: token,
-          userData: user,
+          userData: {
+              id: user._id,
+              email: user.email,
+              name: user.name, // Include only non-sensitive user data
+          },
       });
-
   } catch (error) {
       console.log(error);
       return res.status(500).json({
           success: false,
-          message: 'Internal Server Error'
+          message: 'Internal Server Error',
       });
   }
 };
+
+
+
 
 // verifyloginOTP
 const verifyLoginOTP = async (req, res) => {
