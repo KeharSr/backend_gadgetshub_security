@@ -10,17 +10,32 @@ const fs = require('fs');
 const {OAuth2Client} = require('google-auth-library');
 const axios = require('axios'); 
 const client=new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+const validator =require('validator');
 const {sendVerificationEmail,sendLoginOTP} = require("../service/authentication"); 
+
+
+// sanitize user input
+const sanitizeInput = (input) => {
+  return validator.escape(input.trim());
+};
 
 const createUser = async (req, res) => {
   console.log(req.body);
   const { firstName, lastName, userName, email, phoneNumber, password } = req.body;
+
+  // Sanitize user input
+  const sanitizedFirstName = sanitizeInput(firstName);
+  const sanitizedLastName = sanitizeInput(lastName);
+  const sanitizedUserName = sanitizeInput(userName);
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedPhoneNumber = sanitizeInput(phoneNumber);
+  const sanitizedPassword = password;
   
-  if (!firstName || !lastName || !userName || !email || !phoneNumber || !password) {
-      return res.status(400).json({
-          success: false,
-          message: 'Please enter all details!'
-      });
+  if(!sanitizedFirstName || !sanitizedLastName || !sanitizedUserName || !sanitizedEmail || !sanitizedPhoneNumber || !sanitizedPassword){
+    return res.status(400).json({
+      success: false,
+      message: 'Please enter all the fields',
+    });
   }
 
   // Password validation
@@ -33,8 +48,8 @@ const createUser = async (req, res) => {
   }
 
   try {
-      const existingUserByEmail = await userModel.findOne({ email: email });
-      const existingUserByPhone = await userModel.findOne({ phoneNumber: phoneNumber });
+      const existingUserByEmail = await userModel.findOne({ email: sanitizedEmail });
+      const existingUserByPhone = await userModel.findOne({ phoneNumber: sanitizedPhoneNumber });
 
       if (existingUserByEmail) {
           return res.status(400).json({
@@ -51,7 +66,7 @@ const createUser = async (req, res) => {
       }
 
       const randomSalt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, randomSalt);
+      const hashedPassword = await bcrypt.hash(sanitizedPassword, randomSalt);
 
       //Generate OTP 
       const otp = Math.floor(100000 + Math.random() * 900000);
@@ -59,11 +74,11 @@ const createUser = async (req, res) => {
       const otpExpiry = Date.now() + 10 * 60 * 1000;
 
       const newUser = new userModel({
-          firstName: firstName,
-          lastName: lastName,
-          userName: userName,
-          email: email,
-          phoneNumber: phoneNumber,
+          firstName: sanitizedFirstName,
+          lastName: sanitizedLastName,
+          userName: sanitizedUserName,
+          email: sanitizedEmail,
+          phoneNumber: sanitizedPhoneNumber,
           password: hashedPassword,
           verificationOTP: otp,
           otpExpires: otpExpiry,
@@ -73,7 +88,7 @@ const createUser = async (req, res) => {
       await newUser.save();
 
       // Send verification email
-      const emailSent = await sendVerificationEmail(email, otp);
+      const emailSent = await sendVerificationEmail(sanitizedEmail, otp);
 
       if (!emailSent) {
           return res.status(500).json({
@@ -99,7 +114,10 @@ const createUser = async (req, res) => {
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
 
-  if (!email || !password) {
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedPassword = password;
+
+  if (!sanitizedEmail || !sanitizedPassword) {
       return res.status(400).json({
           success: false,
           message: 'Please enter all the fields',
@@ -107,7 +125,7 @@ const loginUser = async (req, res) => {
   }
 
   try {
-      const user = await userModel.findOne({ email: email });
+      const user = await userModel.findOne({ email: sanitizedEmail });
 
       if (!user) {
           return res.status(400).json({
@@ -132,7 +150,7 @@ const loginUser = async (req, res) => {
           });
       }
 
-      const isValidPassword = await bcrypt.compare(password, user.password);
+      const isValidPassword = await bcrypt.compare(sanitizedPassword, user.password);
 
       if (!isValidPassword) {
           // Increment failed login attempts
@@ -161,7 +179,7 @@ const loginUser = async (req, res) => {
           await user.save();
 
           // Send OTP email
-          const emailSent = await sendLoginOTP(email, loginOTP);
+          const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
 
           if (!emailSent) {
               return res.status(500).json({
