@@ -1,18 +1,20 @@
 const { response } = require("express");
-const userModel = require('../models/userModel');
+const userModel = require("../models/userModel");
 const { checkout } = require("../routes/userRoutes");
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const sendOtp = require("../service/sentOtp");
-const path = require('path');
+const path = require("path");
 const User = require("../models/userModel");
-const fs = require('fs');
-const {OAuth2Client} = require('google-auth-library');
-const axios = require('axios'); 
-const client=new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
-const validator =require('validator');
-const {sendVerificationEmail,sendLoginOTP} = require("../service/authentication"); 
-
+const fs = require("fs");
+const { OAuth2Client } = require("google-auth-library");
+const axios = require("axios");
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const validator = require("validator");
+const {
+  sendVerificationEmail,
+  sendLoginOTP,
+} = require("../service/authentication");
 
 // sanitize user input
 const sanitizeInput = (input) => {
@@ -21,7 +23,8 @@ const sanitizeInput = (input) => {
 
 const createUser = async (req, res) => {
   console.log(req.body);
-  const { firstName, lastName, userName, email, phoneNumber, password } = req.body;
+  const { firstName, lastName, userName, email, phoneNumber, password } =
+    req.body;
 
   // Sanitize user input
   const sanitizedFirstName = sanitizeInput(firstName);
@@ -30,86 +33,99 @@ const createUser = async (req, res) => {
   const sanitizedEmail = sanitizeInput(email);
   const sanitizedPhoneNumber = sanitizeInput(phoneNumber);
   const sanitizedPassword = password;
-  
-  if(!sanitizedFirstName || !sanitizedLastName || !sanitizedUserName || !sanitizedEmail || !sanitizedPhoneNumber || !sanitizedPassword){
+
+  if (
+    !sanitizedFirstName ||
+    !sanitizedLastName ||
+    !sanitizedUserName ||
+    !sanitizedEmail ||
+    !sanitizedPhoneNumber ||
+    !sanitizedPassword
+  ) {
     return res.status(400).json({
       success: false,
-      message: 'Please enter all the fields',
+      message: "Please enter all the fields",
     });
   }
 
   // Password validation
-  const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+  const passwordRegex =
+    /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
   if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-          success: false,
-          message: 'Password must contain at least 8 characters, one capital letter, one number, and one special character!'
-      });
+    return res.status(400).json({
+      success: false,
+      message:
+        "Password must contain at least 8 characters, one capital letter, one number, and one special character!",
+    });
   }
 
   try {
-      const existingUserByEmail = await userModel.findOne({ email: sanitizedEmail });
-      const existingUserByPhone = await userModel.findOne({ phoneNumber: sanitizedPhoneNumber });
+    const existingUserByEmail = await userModel.findOne({
+      email: sanitizedEmail,
+    });
+    const existingUserByPhone = await userModel.findOne({
+      phoneNumber: sanitizedPhoneNumber,
+    });
 
-      if (existingUserByEmail) {
-          return res.status(400).json({
-              success: false,
-              message: 'User with this email already exists!'
-          });
-      }
-
-      if (existingUserByPhone) {
-          return res.status(400).json({
-              success: false,
-              message: 'User with this phone number already exists!'
-          });
-      }
-
-      const randomSalt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(sanitizedPassword, randomSalt);
-
-      //Generate OTP 
-      const otp = Math.floor(100000 + Math.random() * 900000);
-      // generate expiry time for OTP
-      const otpExpiry = Date.now() + 10 * 60 * 1000;
-
-      const newUser = new userModel({
-          firstName: sanitizedFirstName,
-          lastName: sanitizedLastName,
-          userName: sanitizedUserName,
-          email: sanitizedEmail,
-          phoneNumber: sanitizedPhoneNumber,
-          password: hashedPassword,
-          verificationOTP: otp,
-          otpExpires: otpExpiry,
-          isVerified: false
+    if (existingUserByEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "User with this email already exists!",
       });
+    }
 
-      await newUser.save();
-
-      // Send verification email
-      const emailSent = await sendVerificationEmail(sanitizedEmail, otp);
-
-      if (!emailSent) {
-          return res.status(500).json({
-              success: false,
-              message: 'Error sending verification email'
-          });
-      }
-
-      res.status(201).json({
-          success: true,
-          message: 'User created successfully.Please check your email for verification OTP'
+    if (existingUserByPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "User with this phone number already exists!",
       });
+    }
 
+    const randomSalt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(sanitizedPassword, randomSalt);
+
+    //Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+    // generate expiry time for OTP
+    const otpExpiry = Date.now() + 10 * 60 * 1000;
+
+    const newUser = new userModel({
+      firstName: sanitizedFirstName,
+      lastName: sanitizedLastName,
+      userName: sanitizedUserName,
+      email: sanitizedEmail,
+      phoneNumber: sanitizedPhoneNumber,
+      password: hashedPassword,
+      verificationOTP: otp,
+      otpExpires: otpExpiry,
+      isVerified: false,
+    });
+
+    await newUser.save();
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(sanitizedEmail, otp);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Error sending verification email",
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message:
+        "User created successfully.Please check your email for verification OTP",
+    });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({
-          success: false,
-          message: 'Internal Server Error!'
-      });
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error!",
+    });
   }
-}
+};
 
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
@@ -118,215 +134,212 @@ const loginUser = async (req, res) => {
   const sanitizedPassword = password;
 
   if (!sanitizedEmail || !sanitizedPassword) {
-      return res.status(400).json({
-          success: false,
-          message: 'Please enter all the fields',
-      });
+    return res.status(400).json({
+      success: false,
+      message: "Please enter all the fields",
+    });
   }
 
   try {
-      const user = await userModel.findOne({ email: sanitizedEmail });
+    const user = await userModel.findOne({ email: sanitizedEmail });
 
-      if (!user) {
-          return res.status(400).json({
-              success: false,
-              message: "Email Doesn't Exist!",
-          });
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Email Doesn't Exist!",
+      });
+    }
+
+    // Check if email is verified
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email first",
+      });
+    }
+
+    // Check if user is locked
+    if (user.lockUntil && user.lockUntil > Date.now()) {
+      return res.status(403).json({
+        success: false,
+        message: "Account is temporarily locked. Please try again later.",
+      });
+    }
+
+    const isValidPassword = await bcrypt.compare(
+      sanitizedPassword,
+      user.password
+    );
+
+    if (!isValidPassword) {
+      // Increment failed login attempts
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+
+      if (user.loginAttempts >= 3) {
+        user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
+        user.loginAttempts = 0;
       }
 
-      // Check if email is verified
-      if (!user.isVerified) {
-          return res.status(403).json({
-              success: false,
-              message: 'Please verify your email first',
-          });
-      }
-
-      // Check if user is locked
-      if (user.lockUntil && user.lockUntil > Date.now()) {
-          return res.status(403).json({
-              success: false,
-              message: 'Account is temporarily locked. Please try again later.',
-          });
-      }
-
-      const isValidPassword = await bcrypt.compare(sanitizedPassword, user.password);
-
-      if (!isValidPassword) {
-          // Increment failed login attempts
-          user.loginAttempts = (user.loginAttempts || 0) + 1;
-
-          if (user.loginAttempts >= 3) {
-              user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
-              user.loginAttempts = 0;
-          }
-
-          await user.save();
-
-          return res.status(400).json({
-              success: false,
-              message: "Password Doesn't Match!",
-          });
-      }
-
-      // If OTP is not provided, generate and send new OTP
-      if (!otp) {
-          const loginOTP = Math.floor(100000 + Math.random() * 900000);
-          const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
-
-          user.loginOTP = loginOTP;
-          user.loginOTPExpires = otpExpiry;
-          await user.save();
-
-          // Send OTP email
-          const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
-
-          if (!emailSent) {
-              return res.status(500).json({
-                  success: false,
-                  message: 'Failed to send OTP',
-              });
-          }
-
-          return res.status(200).json({
-              success: true,
-              message: 'OTP sent to your email',
-              requireOTP: true,
-          });
-      }
-
-      // Verify OTP
-      if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
-          return res.status(400).json({
-              success: false,
-              message: 'Invalid or expired OTP',
-          });
-      }
-
-      // Reset login attempts and clear OTP
-      user.loginAttempts = 0;
-      user.lockUntil = undefined;
-      user.loginOTP = null;
-      user.loginOTPExpires = null;
       await user.save();
 
-      // Create a clean JWT payload (exclude isAdmin)
-      const tokenPayload = {
-          id: user._id, // Include only necessary fields
-          email: user.email,
-          name: user.name, // Optional
-      };
+      return res.status(400).json({
+        success: false,
+        message: "Password Doesn't Match!",
+      });
+    }
 
-      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    // If OTP is not provided, generate and send new OTP
+    if (!otp) {
+      const loginOTP = Math.floor(100000 + Math.random() * 900000);
+      const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+
+      user.loginOTP = loginOTP;
+      user.loginOTPExpires = otpExpiry;
+      await user.save();
+
+      // Send OTP email
+      const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
+
+      if (!emailSent) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send OTP",
+        });
+      }
 
       return res.status(200).json({
-          success: true,
-          message: 'User Logged in Successfully!',
-          token: token,
-          userData: {
-              id: user._id,
-              email: user.email,
-              name: user.name, // Include only non-sensitive user data
-          },
+        success: true,
+        message: "OTP sent to your email",
+        requireOTP: true,
       });
+    }
+
+    // Verify OTP
+    if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    // Reset login attempts and clear OTP
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    user.loginOTP = null;
+    user.loginOTPExpires = null;
+    await user.save();
+
+    // Create a clean JWT payload (exclude isAdmin)
+    const tokenPayload = {
+      id: user._id, // Include only necessary fields
+      email: user.email,
+      name: user.name, // Optional
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "User Logged in Successfully!",
+      token: token,
+      userData: {
+        id: user._id,
+        email: user.email,
+        name: user.name, // Include only non-sensitive user data
+      },
+    });
   } catch (error) {
-      console.log(error);
-      return res.status(500).json({
-          success: false,
-          message: 'Internal Server Error',
-      });
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 };
-
-
-
 
 // verifyloginOTP
 const verifyLoginOTP = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-      const user
-          = 
-          await userModel.findOne({
-              email,
-              loginOTP: otp,
-              loginOTPExpires: { $gt: Date.now() }
-          });
+    const user = await userModel.findOne({
+      email,
+      loginOTP: otp,
+      loginOTPExpires: { $gt: Date.now() },
+    });
 
-      if (!user) {
-          return res.status(400).json({
-              success: false,
-              message: 'Invalid or expired OTP'
-          });
-      }
-
-      // Reset login attempts and clear OTP
-      user.loginAttempts = 0;
-      user.lockUntil = undefined;
-      user.loginOTP = null;
-      user.loginOTPExpires = null;
-      await user.save();
-
-      const token = jwt.sign(
-          {
-              id: user._id,
-              isAdmin: user.isAdmin,
-          },
-          process.env.JWT_SECRET
-      );
-
-      res.status(200).json({
-          success: true,
-          message: 'User Logged in Successfully!',
-          token: token,
-          userData: user,
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
       });
+    }
 
+    // Reset login attempts and clear OTP
+    user.loginAttempts = 0;
+    user.lockUntil = undefined;
+    user.loginOTP = null;
+    user.loginOTPExpires = null;
+    await user.save();
+
+    const token = jwt.sign(
+      {
+        id: user._id,
+        isAdmin: user.isAdmin,
+      },
+      process.env.JWT_SECRET
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "User Logged in Successfully!",
+      token: token,
+      userData: user,
+    });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({
-          success: false,
-          message: 'Internal Server Error'
-      });
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 };
-
 
 const verifyEmail = async (req, res) => {
   const { email, otp } = req.body;
 
   try {
-      const user = await userModel.findOne({ 
-          email,
-          verificationOTP: otp,
-          otpExpires: { $gt: Date.now() }
+    const user = await userModel.findOne({
+      email,
+      verificationOTP: otp,
+      otpExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
       });
+    }
 
-      if (!user) {
-          return res.status(400).json({
-              success: false,
-              message: 'Invalid or expired OTP'
-          });
-      }
+    // Update user verification status
+    user.isVerified = true;
+    user.verificationOTP = null;
+    user.otpExpires = null;
+    await user.save();
 
-      // Update user verification status
-      user.isVerified = true;
-      user.verificationOTP = null;
-      user.otpExpires = null;
-      await user.save();
-
-      res.status(200).json({
-          success: true,
-          message: 'Email verified successfully'
-      });
-
+    res.status(200).json({
+      success: true,
+      message: "Email verified successfully",
+    });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({
-          success: false,
-          message: 'Internal Server Error'
-      });
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 };
 
@@ -334,82 +347,79 @@ const resendLoginOTP = async (req, res) => {
   const { email } = req.body;
 
   try {
-      const user = await userModel.findOne({ email });
-      
-      if (!user) {
-          return res.status(400).json({
-              success: false,
-              message: 'User not found'
-          });
-      }
+    const user = await userModel.findOne({ email });
 
-      const loginOTP = Math.floor(100000 + Math.random() * 900000);
-      const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
-
-      user.loginOTP = loginOTP;
-      user.loginOTPExpires = otpExpiry;
-      await user.save();
-
-      const emailSent = await sendLoginOTP(email, loginOTP);
-
-      if (!emailSent) {
-          return res.status(500).json({
-              success: false,
-              message: 'Failed to send OTP'
-          });
-      }
-
-      res.status(200).json({
-          success: true,
-          message: 'OTP resent successfully'
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "User not found",
       });
+    }
 
+    const loginOTP = Math.floor(100000 + Math.random() * 900000);
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.loginOTP = loginOTP;
+    user.loginOTPExpires = otpExpiry;
+    await user.save();
+
+    const emailSent = await sendLoginOTP(email, loginOTP);
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "OTP resent successfully",
+    });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({
-          success: false,
-          message: 'Internal Server Error'
-      });
+    console.log(error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
   }
 };
 
 const getCurrentUser = async (req, res) => {
   try {
-      const token = req.headers.authorization?.split(" ")[1];
+    const token = req.headers.authorization?.split(" ")[1];
 
-      if (!token) {
-          return res.status(401).json({
-              success: false,
-              message: "Authentication token missing",
-          });
-      }
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await userModel.findById(decoded.id).select("-password"); // Do not return the password
-
-      if (!user) {
-          return res.status(404).json({
-              success: false,
-              message: "User not found!",
-          });
-      }
-
-      // Respond with user profile
-      return res.status(200).json({
-          success: true,
-          message: "User profile retrieved successfully",
-          user: user,
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token missing",
       });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await userModel.findById(decoded.id).select("-password"); // Do not return the password
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found!",
+      });
+    }
+
+    // Respond with user profile
+    return res.status(200).json({
+      success: true,
+      message: "User profile retrieved successfully",
+      user: user,
+    });
   } catch (error) {
-      console.error("Error in getCurrentUser:", error);
-      return res.status(500).json({
-          success: false,
-          message: "Internal server error",
-      });
+    console.error("Error in getCurrentUser:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
-
-
 
 const getToken = async (req, res) => {
   try {
@@ -421,7 +431,7 @@ const getToken = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'User not found',
+        message: "User not found",
       });
     }
 
@@ -429,7 +439,7 @@ const getToken = async (req, res) => {
     if (user.isAdmin) {
       return res.status(403).json({
         success: false,
-        message: 'Admins are not allowed to generate tokens for this endpoint.',
+        message: "Admins are not allowed to generate tokens for this endpoint.",
       });
     }
 
@@ -441,126 +451,124 @@ const getToken = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Token generated successfully!',
+      message: "Token generated successfully!",
       token: token,
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({
       success: false,
-      message: 'Internal Server Error',
+      message: "Internal Server Error",
       error: error,
     });
   }
 };
 
-  const forgotPassword = async (req, res) => {
-    const { phoneNumber} = req.body;
-  
-    if (!phoneNumber) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter your phone number",
-      });
-    }
-    try{
-  
-      // finding user by phone number
-      const user = await userModel.findOne({ phoneNumber: phoneNumber });
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-  
-      // Generate OTP random 6 digit number
-      const otp = Math.floor(100000 + Math.random() * 900000);
-      // generate expiry time for OTP
-      const expiry = Date.now() + 10 * 60 * 1000;
-      // save to database for verification
-      user.resetPasswordOTP = otp;
-      user.resetPasswordExpires = expiry;
-      await user.save();
-      // set expiry time for OTP
-  
-      // send OTP to registered phone number
-      const isSent = await sendOtp(phoneNumber, otp)
-      if(isSent){
-        return res.status(400).json({
-          sucess : false,
-          message : 'Error sending OTP'
-        })
-      }
-  
-      //If sucess
-      res.status(200).json({
-        sucess : true,
-        message : "OTP send sucesfully"
-  
-      })
-      
-  
-  
-  
-    }catch(error){
-      console.log(error);
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
+const forgotPassword = async (req, res) => {
+  const { phoneNumber } = req.body;
+
+  // Sanitize phone number input
+  const sanitizedPhoneNumber = phoneNumber ? sanitizeInput(phoneNumber) : null;
+
+  if (!sanitizedPhoneNumber) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter your phone number",
+    });
   }
 
-  const verifyOtpAndResetPassword = async (req, res) => {
-    const { phoneNumber, otp, password } = req.body;
-    if (!phoneNumber || !otp || !password) {
+  try {
+    // Finding user by phone number
+    const user = await userModel.findOne({ phoneNumber: sanitizedPhoneNumber });
+    if (!user) {
       return res.status(400).json({
         success: false,
-        message: "Please enter all fields",
+        message: "User not found",
       });
     }
-    try{
-      const user = await userModel.findOne({phoneNumber: phoneNumber});
-  
-      //Verify OTP
-      if(user.resetPasswordOTP != otp){
-        return res.status(400).json({
-          success: false,
-          message: "Invalid OTP"
-        })
-      }
-  
-      //Check if OTP is expired
-      if(user.resetPasswordExpires < Date.now()){
-        return res.status(400).json({
-          success: false,
-          message: "OTP expired"
-        })
-      }
-  
-      //Hash the password
-      const randomSalt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, randomSalt);
-  
-      //update to database
-      user.password = hashedPassword;
-      await user.save();
-  
-      //Send response
-      res.status(200).json({
-        success: true,
-        message: "Password reset successfully"
-      })
-  
-    }catch(error){
-      console.log(error);
-      return res.status(500).json({
+
+    // Generate a random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // Set expiry time for OTP (10 minutes from now)
+    const expiry = Date.now() + 10 * 60 * 1000;
+
+    // Save OTP and expiry to database for verification
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = expiry;
+    await user.save();
+
+    // Send OTP to the registered phone number
+    const isSent = await sendOtp(sanitizedPhoneNumber, otp);
+    if (!isSent) {
+      return res.status(400).json({
         success: false,
-        message: "Internal server error",
-      })
+        message: "Error sending OTP",
+      });
     }
-  } 
+
+    // If successful
+    res.status(200).json({
+      success: true,
+      message: "OTP sent successfully",
+    });
+  } catch (error) {
+    console.error("Error in forgotPassword:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+const verifyOtpAndResetPassword = async (req, res) => {
+  const { phoneNumber, otp, password } = req.body;
+  if (!phoneNumber || !otp || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter all fields",
+    });
+  }
+  try {
+    const user = await userModel.findOne({ phoneNumber: phoneNumber });
+
+    //Verify OTP
+    if (user.resetPasswordOTP != otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP",
+      });
+    }
+
+    //Check if OTP is expired
+    if (user.resetPasswordExpires < Date.now()) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired",
+      });
+    }
+
+    //Hash the password
+    const randomSalt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, randomSalt);
+
+    //update to database
+    user.password = hashedPassword;
+    await user.save();
+
+    //Send response
+    res.status(200).json({
+      success: true,
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
 
 const uploadProfilePicture = async (req, res) => {
   // const id = req.user.id;
@@ -570,7 +578,7 @@ const uploadProfilePicture = async (req, res) => {
   if (!profilePicture) {
     return res.status(400).json({
       success: false,
-      message: 'Please upload an image',
+      message: "Please upload an image",
     });
   }
 
@@ -595,61 +603,71 @@ const uploadProfilePicture = async (req, res) => {
     //  send image name to the user
     res.status(200).json({
       success: true,
-      message: 'Image uploaded successfully',
+      message: "Image uploaded successfully",
       profilePicture: imageName,
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({
       success: false,
-      message: 'Internal Server Error',
+      message: "Internal Server Error",
       error: error,
     });
   }
 };
 
-
-  // edit user profile
+// edit user profile
 const editUserProfile = async (req, res) => {
-    const { firstName, lastName, userName,email, phoneNumber,profilePicture } = req.body;
-    const userId = req.user.id;
+  const { firstName, lastName, userName, email, phoneNumber, profilePicture } =
+    req.body;
+  const userId = req.user.id;
 
-    try {
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+  try {
+    // Sanitize inputs
+    const sanitizedFirstName = firstName ? sanitizeInput(firstName) : undefined;
+    const sanitizedLastName = lastName ? sanitizeInput(lastName) : undefined;
+    const sanitizedUserName = userName ? sanitizeInput(userName) : undefined;
+    const sanitizedEmail = email ? sanitizeInput(email) : undefined;
+    const sanitizedPhoneNumber = phoneNumber
+      ? sanitizeInput(phoneNumber)
+      : undefined;
+    const sanitizedProfilePicture = profilePicture
+      ? sanitizeInput(profilePicture)
+      : undefined;
 
-        user.firstName = firstName|| user.firstName;
-        user.lastName = lastName|| user.lastName;
-        user.email = email|| user.email;
-        user.phoneNumber = phoneNumber|| user.phoneNumber;
-        user.userName = userName|| user.userName;
-        user.profilePicture = profilePicture|| user.profilePicture;
-      
-       
-        
+    const user = await User.findById(userId);
 
-        await user.save();
-
-        res.status(200).json({
-            success: true,
-            message: 'User profile updated successfully',
-            user
-        });
-
-    } catch (error) {
-        console.error('Error updating user profile:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error updating user profile',
-            error: error.message
-        });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
-}
+
+    // Update user fields with sanitized data or keep the existing values
+    user.firstName = sanitizedFirstName || user.firstName;
+    user.lastName = sanitizedLastName || user.lastName;
+    user.userName = sanitizedUserName || user.userName;
+    user.email = sanitizedEmail || user.email;
+    user.phoneNumber = sanitizedPhoneNumber || user.phoneNumber;
+    user.profilePicture = sanitizedProfilePicture || user.profilePicture;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "User profile updated successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating user profile",
+      error: error.message,
+    });
+  }
+};
 
 const googleLogin = async (req, res) => {
   console.log(req.body);
@@ -661,7 +679,7 @@ const googleLogin = async (req, res) => {
   if (!token) {
     return res.status(400).json({
       success: false,
-      message: 'Please fill all the fields',
+      message: "Please fill all the fields",
     });
   }
 
@@ -684,11 +702,14 @@ const googleLogin = async (req, res) => {
       const hashedPassword = await bcrypt.hash(password, randomSalt);
 
       // Fetch the image from Google
-      const response = await axios.get(picture, { responseType: 'stream' });
+      const response = await axios.get(picture, { responseType: "stream" });
 
       // Set up image name and path
       const imageName = `${given_name}_${family_name}_${Date.now()}.png`;
-      const imagePath = path.join(__dirname, `../public/profile_pictures/${imageName}`);
+      const imagePath = path.join(
+        __dirname,
+        `../public/profile_pictures/${imageName}`
+      );
 
       // Ensure the directory exists
       const directoryPath = path.dirname(imagePath);
@@ -700,8 +721,8 @@ const googleLogin = async (req, res) => {
 
       // Wait for the image to be fully saved
       await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
+        writer.on("finish", resolve);
+        writer.on("error", reject);
       });
 
       user = new userModel({
@@ -710,7 +731,7 @@ const googleLogin = async (req, res) => {
         email: email,
         userName: given_name,
         password: hashedPassword,
-        isAdmin: role === 'admin',
+        isAdmin: role === "admin",
         profilePicture: imageName,
         fromGoogle: true,
       });
@@ -724,13 +745,13 @@ const googleLogin = async (req, res) => {
       (options = {
         expiresIn:
           Date.now() + process.env.JWT_TOKEN_EXPIRE * 24 * 60 * 60 * 1000 ||
-          '1d',
+          "1d",
       })
     );
 
     return res.status(201).json({
       success: true,
-      message: 'User Logged In Successfully!',
+      message: "User Logged In Successfully!",
       token: jwtToken,
       user: {
         id: user._id,
@@ -745,7 +766,7 @@ const googleLogin = async (req, res) => {
     console.log(error);
     res.status(500).json({
       success: false,
-      message: 'Internal Server Error!',
+      message: "Internal Server Error!",
       error: error,
     });
   }
@@ -761,7 +782,7 @@ const getUserByGoogleEmail = async (req, res) => {
   if (!token) {
     return res.status(400).json({
       success: false,
-      message: 'Please fill all the fields',
+      message: "Please fill all the fields",
     });
   }
   try {
@@ -780,20 +801,20 @@ const getUserByGoogleEmail = async (req, res) => {
     if (user) {
       return res.status(200).json({
         success: true,
-        message: 'User found',
+        message: "User found",
         data: user,
       });
     }
 
     res.status(201).json({
       success: true,
-      message: 'User not found',
+      message: "User not found",
     });
   } catch (e) {
     console.log(e);
     res.status(500).json({
       success: false,
-      message: 'Internal Server Error',
+      message: "Internal Server Error",
       error: e,
     });
   }
@@ -824,23 +845,19 @@ const checkAdmin = async (req, res) => {
   }
 };
 
-
-  
 module.exports = {
-    createUser,
-    loginUser,
-    getCurrentUser,
-    getToken,
-    forgotPassword,
-    verifyOtpAndResetPassword,
-    uploadProfilePicture,
-    editUserProfile,
-    googleLogin,
-    getUserByGoogleEmail,
-    verifyEmail,
-    resendLoginOTP,
-    verifyLoginOTP,
-    checkAdmin
-    
-
-}
+  createUser,
+  loginUser,
+  getCurrentUser,
+  getToken,
+  forgotPassword,
+  verifyOtpAndResetPassword,
+  uploadProfilePicture,
+  editUserProfile,
+  googleLogin,
+  getUserByGoogleEmail,
+  verifyEmail,
+  resendLoginOTP,
+  verifyLoginOTP,
+  checkAdmin,
+};
