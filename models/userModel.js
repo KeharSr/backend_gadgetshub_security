@@ -56,10 +56,6 @@ const userSchema = new mongoose.Schema({
   profilePicture: {
     type: String,
   },
-  fromGoogle: {
-    type: Boolean,
-    default: false,
-  },
 
   isVerified: {
     type: Boolean,

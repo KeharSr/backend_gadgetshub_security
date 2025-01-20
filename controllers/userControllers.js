@@ -7,9 +7,7 @@ const sendOtp = require("../service/sentOtp");
 const path = require("path");
 const User = require("../models/userModel");
 const fs = require("fs");
-const { OAuth2Client } = require("google-auth-library");
 const axios = require("axios");
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const validator = require("validator");
 const {
   sendVerificationEmail,
@@ -669,157 +667,6 @@ const editUserProfile = async (req, res) => {
   }
 };
 
-const googleLogin = async (req, res) => {
-  console.log(req.body);
-
-  // Destructuring the data
-  const { token } = req.body;
-
-  // Validate
-  if (!token) {
-    return res.status(400).json({
-      success: false,
-      message: "Please fill all the fields",
-    });
-  }
-
-  // try catch
-  try {
-    // verify token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    const { email, given_name, family_name, picture } = ticket.getPayload();
-
-    let user = await userModel.findOne({ email: email });
-
-    if (!user) {
-      const { password, role } = req.body;
-
-      const randomSalt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, randomSalt);
-
-      // Fetch the image from Google
-      const response = await axios.get(picture, { responseType: "stream" });
-
-      // Set up image name and path
-      const imageName = `${given_name}_${family_name}_${Date.now()}.png`;
-      const imagePath = path.join(
-        __dirname,
-        `../public/profile_pictures/${imageName}`
-      );
-
-      // Ensure the directory exists
-      const directoryPath = path.dirname(imagePath);
-      fs.mkdirSync(directoryPath, { recursive: true });
-
-      // Create a write stream to save the image
-      const writer = fs.createWriteStream(imagePath);
-      response.data.pipe(writer);
-
-      // Wait for the image to be fully saved
-      await new Promise((resolve, reject) => {
-        writer.on("finish", resolve);
-        writer.on("error", reject);
-      });
-
-      user = new userModel({
-        firstName: given_name,
-        lastName: family_name,
-        email: email,
-        userName: given_name,
-        password: hashedPassword,
-        isAdmin: role === "admin",
-        profilePicture: imageName,
-        fromGoogle: true,
-      });
-      await user.save();
-    }
-
-    // generate token
-    const jwtToken = await jwt.sign(
-      { id: user._id, isAdmin: user.isAdmin },
-      process.env.JWT_SECRET,
-      (options = {
-        expiresIn:
-          Date.now() + process.env.JWT_TOKEN_EXPIRE * 24 * 60 * 60 * 1000 ||
-          "1d",
-      })
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: "User Logged In Successfully!",
-      token: jwtToken,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        isAdmin: user.isAdmin,
-        profilePicture: user.profilePicture,
-      },
-    });
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      success: false,
-      message: "Internal Server Error!",
-      error: error,
-    });
-  }
-};
-
-const getUserByGoogleEmail = async (req, res) => {
-  console.log(req.body);
-
-  // Destructuring the data
-  const { token } = req.body;
-
-  // Validate
-  if (!token) {
-    return res.status(400).json({
-      success: false,
-      message: "Please fill all the fields",
-    });
-  }
-  try {
-    // verify token
-    const ticket = await client.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-
-    console.log(ticket);
-
-    const { email } = ticket.getPayload();
-
-    const user = await userModel.findOne({ email: email });
-
-    if (user) {
-      return res.status(200).json({
-        success: true,
-        message: "User found",
-        data: user,
-      });
-    }
-
-    res.status(201).json({
-      success: true,
-      message: "User not found",
-    });
-  } catch (e) {
-    console.log(e);
-    res.status(500).json({
-      success: false,
-      message: "Internal Server Error",
-      error: e,
-    });
-  }
-};
-
 const checkAdmin = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -854,8 +701,6 @@ module.exports = {
   verifyOtpAndResetPassword,
   uploadProfilePicture,
   editUserProfile,
-  googleLogin,
-  getUserByGoogleEmail,
   verifyEmail,
   resendLoginOTP,
   verifyLoginOTP,
