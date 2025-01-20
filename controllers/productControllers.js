@@ -1,11 +1,18 @@
 const path = require("path");
 const productModel = require("../models/productModel");
 const fs = require("fs");
+const validator = require("validator"); // Import validator library
 
+// Utility function to sanitize input
+const sanitizeInput = (input) => {
+  if (typeof input === "string") {
+    return validator.escape(input.trim());
+  }
+  return input; // Return non-string inputs as-is
+};
+
+// Create a new product
 const createProduct = async (req, res) => {
-  console.log(req.body);
-  console.log(req.files);
-
   const {
     productName,
     productPrice,
@@ -14,13 +21,20 @@ const createProduct = async (req, res) => {
     productQuantity,
   } = req.body;
 
+  // Sanitize inputs
+  const sanitizedProductName = sanitizeInput(productName);
+  const sanitizedProductPrice = parseFloat(productPrice);
+  const sanitizedProductCategory = sanitizeInput(productCategory);
+  const sanitizedProductDescription = sanitizeInput(productDescription);
+  const sanitizedProductQuantity = parseInt(productQuantity);
+
   // Validate required fields
   if (
-    !productName ||
-    !productPrice ||
-    !productCategory ||
-    !productDescription ||
-    !productQuantity
+    !sanitizedProductName ||
+    !sanitizedProductPrice ||
+    !sanitizedProductCategory ||
+    !sanitizedProductDescription ||
+    !sanitizedProductQuantity
   ) {
     return res.status(400).json({
       success: false,
@@ -29,14 +43,14 @@ const createProduct = async (req, res) => {
   }
 
   // Validate price and quantity
-  if (productPrice < 0) {
+  if (sanitizedProductPrice < 0) {
     return res.status(400).json({
       success: false,
       message: "Product price cannot be negative!",
     });
   }
 
-  if (productQuantity < 0) {
+  if (sanitizedProductQuantity < 0) {
     return res.status(400).json({
       success: false,
       message: "Product quantity cannot be negative!",
@@ -49,19 +63,19 @@ const createProduct = async (req, res) => {
     // Handle image upload
     if (req.files && req.files.productImage) {
       const { productImage } = req.files;
-      imageName = `${Date.now()}_${productImage.name}`;
+      imageName = `${Date.now()}_${sanitizeInput(productImage.name)}`;
       const imagePath = path.join(__dirname, `../public/products/${imageName}`);
       await productImage.mv(imagePath);
     }
 
     // Create a new product
     const newProduct = new productModel({
-      productName: productName,
-      productPrice: productPrice,
-      productCategory: productCategory,
-      productDescription: productDescription,
+      productName: sanitizedProductName,
+      productPrice: sanitizedProductPrice,
+      productCategory: sanitizedProductCategory,
+      productDescription: sanitizedProductDescription,
       productImage: imageName,
-      productQuantity: productQuantity,
+      productQuantity: sanitizedProductQuantity,
     });
 
     // Save product to database
@@ -73,7 +87,7 @@ const createProduct = async (req, res) => {
       product: newProduct,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error!",
@@ -81,7 +95,7 @@ const createProduct = async (req, res) => {
   }
 };
 
-//delete product
+// Delete a product
 const deleteProduct = async (req, res) => {
   try {
     await productModel.findByIdAndDelete(req.params.id);
@@ -90,101 +104,96 @@ const deleteProduct = async (req, res) => {
       message: "Product deleted successfully",
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error,
+      error: error.message,
     });
   }
 };
 
-// get single products
-
+// Get a single product
 const getSingleProduct = async (req, res) => {
-  //get product id from url
-  const productId = req.params.id;
+  const productId = sanitizeInput(req.params.id); // Sanitize input
 
   try {
     const product = await productModel.findById(productId);
 
     if (!product) {
-      res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: "No product found",
       });
     }
+
     res.status(200).json({
       success: true,
-      message: "product fetched",
+      message: "Product fetched successfully",
       product: product,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
-      messgae: "internal server error",
-      error: error,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
 
+// Get all products
 const getAllProducts = async (req, res) => {
   try {
-    const allproducts = await productModel.find({});
-    res.status(201).json({
+    const allProducts = await productModel.find({});
+    res.status(200).json({
       success: true,
-      message: "Products Fetched Successfully!",
-      products: allproducts,
+      message: "Products fetched successfully!",
+      products: allProducts,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
-      message: "Internal Server Error!",
-      error: error,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
 
-// update product
+// Update a product
 const updateProduct = async (req, res) => {
-  try {
-    // Validate productPrice and productQuantity in req.body
-    const { productPrice, productQuantity } = req.body;
+  const { productPrice, productQuantity, productImage } = req.body;
 
-    if (productPrice !== undefined && productPrice < 0) {
+  try {
+    // Sanitize inputs
+    const sanitizedProductPrice = productPrice ? parseFloat(productPrice) : undefined;
+    const sanitizedProductQuantity = productQuantity ? parseInt(productQuantity) : undefined;
+
+    // Validate price and quantity
+    if (sanitizedProductPrice !== undefined && sanitizedProductPrice < 0) {
       return res.status(400).json({
         success: false,
         message: "Product price cannot be negative!",
       });
     }
 
-    if (productQuantity !== undefined && productQuantity < 0) {
+    if (sanitizedProductQuantity !== undefined && sanitizedProductQuantity < 0) {
       return res.status(400).json({
         success: false,
         message: "Product quantity cannot be negative!",
       });
     }
 
-    // If there is an image, process it
+    // Handle image upload if provided
     if (req.files && req.files.productImage) {
-      const { productImage } = req.files;
+      const imageFile = req.files.productImage;
+      const imageName = `${Date.now()}_${sanitizeInput(imageFile.name)}`;
+      const imageUploadPath = path.join(__dirname, `../public/products/${imageName}`);
 
-      // Upload image to directory (/public/products folder)
-      const imageName = `${Date.now()}-${productImage.name}`;
-      const imageUploadPath = path.join(
-        __dirname,
-        `../public/products/${imageName}`
-      );
+      // Save new image and delete the old one
+      await imageFile.mv(imageUploadPath);
 
-      // Move the image to the upload path
-      await productImage.mv(imageUploadPath);
-
-      // Add the new image name to req.body
-      req.body.productImage = imageName;
-
-      // Delete the old image if it exists
       const existingProduct = await productModel.findById(req.params.id);
       if (existingProduct && existingProduct.productImage) {
         const oldImagePath = path.join(
@@ -193,14 +202,14 @@ const updateProduct = async (req, res) => {
         );
         fs.unlinkSync(oldImagePath);
       }
+
+      req.body.productImage = imageName;
     }
 
-    // Update the product in the database
-    const updatedProduct = await productModel.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    // Update product
+    const updatedProduct = await productModel.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
 
     res.status(200).json({
       success: true,
@@ -208,124 +217,102 @@ const updateProduct = async (req, res) => {
       data: updatedProduct,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error,
+      error: error.message,
     });
   }
 };
 
+// Pagination for products
 const paginatonProducts = async (req, res) => {
-  // results  page number
-  const pageNo = req.query.page || 1;
-  const limit = req.query.limit || 10;
-
-  // Per page 2 products
+  const pageNo = parseInt(req.query.page || 1);
+  const limit = parseInt(req.query.limit || 10);
 
   try {
-    // Find all products,skip the products, limit the products
     const products = await productModel
       .find({})
       .skip((pageNo - 1) * limit)
       .limit(limit);
 
-    // if page 6 is requested, result 0
-    if (products.length === 0) {
+    if (!products || products.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No products found",
       });
     }
 
-    //response
     res.status(200).json({
       success: true,
       message: "Products fetched successfully",
       products: products,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error,
+      error: error.message,
     });
   }
 };
 
-//get products by category
-
+// Get products by category
 const getProductsByCategory = async (req, res) => {
-  const category = req.query.category || "All";
-  const search = req.query.search || "";
-
-  console.log(category);
-
+  const category = sanitizeInput(req.query.category || "All");
+  const search = sanitizeInput(req.query.search || "");
   const pageNo = parseInt(req.query.page || 1);
   const limit = parseInt(req.query.limit || 10);
-  let products; // Declare products here to make it accessible throughout the function
 
   try {
-    if (category === "All") {
-      products = await productModel
-        .find({
-          productName: { $regex: search, $options: "i" },
-        })
-        .skip((pageNo - 1) * limit)
-        .limit(limit);
-    } else {
-      products = await productModel
-        .find({ ...(category && { productCategory: category }) })
-        .find({ productName: { $regex: search, $options: "i" } })
+    let query = {
+      productName: { $regex: search, $options: "i" },
+    };
 
-        .skip((pageNo - 1) * limit)
-        .limit(limit);
+    if (category !== "All") {
+      query.productCategory = category;
     }
 
+    const products = await productModel.find(query).skip((pageNo - 1) * limit).limit(limit);
+
     if (!products || products.length === 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: "No products found for this category",
       });
     }
 
-    res.status(201).json({
+    res.status(200).json({
       success: true,
       message: "Products fetched successfully by category",
       products: products,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error,
+      error: error.message,
     });
   }
 };
 
-// search products by name
+// Search products by name
 const searchProductsByName = async (req, res) => {
-  const search = req.query.search || "";
-  const pageNo = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+  const search = sanitizeInput(req.query.search || "");
+  const pageNo = parseInt(req.query.page || 1);
+  const limit = parseInt(req.query.limit || 10);
 
   try {
-    // Build the query conditionally based on the search term
     const query = { productName: { $regex: search, $options: "i" } };
 
-    // Fetch the products and the total count
     const [products, totalProducts] = await Promise.all([
-      productModel
-        .find(query)
-        .skip((pageNo - 1) * limit)
-        .limit(limit),
+      productModel.find(query).skip((pageNo - 1) * limit).limit(limit),
       productModel.countDocuments(query),
     ]);
 
-    // If no products are found, return an appropriate response
     if (!products || products.length === 0) {
       return res.status(404).json({
         success: false,
@@ -333,7 +320,6 @@ const searchProductsByName = async (req, res) => {
       });
     }
 
-    // Return the products along with the total count for pagination purposes
     res.status(200).json({
       success: true,
       message: "Products fetched successfully by search",

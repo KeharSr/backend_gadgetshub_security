@@ -55,43 +55,42 @@ const authGuard = async (req, res, next) => {
 // Admin guard
 const adminGuard = async (req, res, next) => {
   try {
-      const token = req.headers.authorization?.split(" ")[1];
+    const token = req.headers.authorization?.split(" ")[1];
 
-      if (!token) {
-          return res.status(401).json({
-              success: false,
-              message: "Authentication token missing",
-          });
-      }
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await userModel.findById(decoded.id);
-
-      if (!user) {
-          return res.status(404).json({
-              success: false,
-              message: "User not found",
-          });
-      }
-
-      if (!user.isAdmin) {
-          return res.status(403).json({
-              success: false,
-              message: "Access denied! Admin privileges required.",
-          });
-      }
-
-      req.user = user; // Attach the user to the request object for further use
-      next();
-  } catch (error) {
-      console.error("Admin guard error:", error);
-      return res.status(500).json({
-          success: false,
-          message: "Internal server error",
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication token missing",
       });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await userModel.findById(decoded.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied! Admin privileges required.",
+      });
+    }
+
+    req.user = user; // Attach the user to the request object for further use
+    next();
+  } catch (error) {
+    console.error("Admin guard error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
-
 
 const verifyRecaptcha = async (req, res, next) => {
   console.log("Incoming reCAPTCHA Token: ", req.body.recaptchaToken); // Log the token received in the request body
@@ -109,7 +108,9 @@ const verifyRecaptcha = async (req, res, next) => {
     const secretKey = process.env.RECAPTCHA_SECRET_KEY;
 
     if (!secretKey) {
-      console.error("Error: RECAPTCHA_SECRET_KEY is not set in the environment");
+      console.error(
+        "Error: RECAPTCHA_SECRET_KEY is not set in the environment"
+      );
       return res.status(500).json({
         success: false,
         message: "Server misconfiguration: Missing reCAPTCHA secret key",
@@ -148,7 +149,8 @@ const verifyRecaptcha = async (req, res, next) => {
       if (data["error-codes"]?.includes("timeout-or-duplicate")) {
         return res.status(401).json({
           success: false,
-          message: "CAPTCHA expired or duplicate. Please refresh the CAPTCHA and try again.",
+          message:
+            "CAPTCHA expired or duplicate. Please refresh the CAPTCHA and try again.",
         });
       }
 
@@ -170,15 +172,8 @@ const verifyRecaptcha = async (req, res, next) => {
   }
 };
 
-
-
-
-
-
-
 module.exports = {
   authGuard,
   adminGuard,
   verifyRecaptcha,
-
 };
