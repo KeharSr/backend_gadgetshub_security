@@ -33,6 +33,9 @@ router.post('/profile_picture',userController.uploadProfilePicture);
 // update user details
 router.put('/update',authGuard, userController.editUserProfile);
 
+// update password
+router.put('/update_password',authGuard, userController.updatePassword);
+
 
 router.get("/check-admin", adminGuard, userController.checkAdmin);
 

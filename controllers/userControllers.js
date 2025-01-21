@@ -156,6 +156,20 @@ const loginUser = async (req, res) => {
       });
     }
 
+    // Check if password is expired
+    const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 90 days
+    const passwordAge = Date.now() - new Date(user.passwordChangedAt).getTime();
+
+    if (passwordAge > passwordExpiryLimit) {
+      return res.status(403).json({
+        success: false,
+        message: "Password has expired. Please reset your password",
+        requirePasswordReset: true,
+      });
+    }
+
+
+
     // Check if user is locked
     if (user.lockUntil && user.lockUntil > Date.now()) {
       return res.status(403).json({
@@ -692,6 +706,73 @@ const checkAdmin = async (req, res) => {
   }
 };
 
+// update password
+
+const updatePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const userId = req.user.id;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Please provide both current and new passwords",
+    });
+  }
+
+  try {
+    const user = await userModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password
+    );
+
+    if (!isCurrentPasswordValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    const passwordRegex =
+      /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must contain at least 8 characters, one capital letter, one number, and one special character!",
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    user.passwordUpdatedAt = Date.now(); // Update the timestamp
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating password:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+
 module.exports = {
   createUser,
   loginUser,
@@ -705,4 +786,5 @@ module.exports = {
   resendLoginOTP,
   verifyLoginOTP,
   checkAdmin,
+  updatePassword,
 };
