@@ -167,8 +167,12 @@ const updateProduct = async (req, res) => {
 
   try {
     // Sanitize inputs
-    const sanitizedProductPrice = productPrice ? parseFloat(productPrice) : undefined;
-    const sanitizedProductQuantity = productQuantity ? parseInt(productQuantity) : undefined;
+    const sanitizedProductPrice = productPrice
+      ? parseFloat(productPrice)
+      : undefined;
+    const sanitizedProductQuantity = productQuantity
+      ? parseInt(productQuantity)
+      : undefined;
 
     // Validate price and quantity
     if (sanitizedProductPrice !== undefined && sanitizedProductPrice < 0) {
@@ -178,7 +182,10 @@ const updateProduct = async (req, res) => {
       });
     }
 
-    if (sanitizedProductQuantity !== undefined && sanitizedProductQuantity < 0) {
+    if (
+      sanitizedProductQuantity !== undefined &&
+      sanitizedProductQuantity < 0
+    ) {
       return res.status(400).json({
         success: false,
         message: "Product quantity cannot be negative!",
@@ -189,7 +196,10 @@ const updateProduct = async (req, res) => {
     if (req.files && req.files.productImage) {
       const imageFile = req.files.productImage;
       const imageName = `${Date.now()}_${sanitizeInput(imageFile.name)}`;
-      const imageUploadPath = path.join(__dirname, `../public/products/${imageName}`);
+      const imageUploadPath = path.join(
+        __dirname,
+        `../public/products/${imageName}`
+      );
 
       // Save new image and delete the old one
       await imageFile.mv(imageUploadPath);
@@ -207,9 +217,13 @@ const updateProduct = async (req, res) => {
     }
 
     // Update product
-    const updatedProduct = await productModel.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const updatedProduct = await productModel.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      {
+        new: true,
+      }
+    );
 
     res.status(200).json({
       success: true,
@@ -275,7 +289,10 @@ const getProductsByCategory = async (req, res) => {
       query.productCategory = category;
     }
 
-    const products = await productModel.find(query).skip((pageNo - 1) * limit).limit(limit);
+    const products = await productModel
+      .find(query)
+      .skip((pageNo - 1) * limit)
+      .limit(limit);
 
     if (!products || products.length === 0) {
       return res.status(404).json({
@@ -309,7 +326,10 @@ const searchProductsByName = async (req, res) => {
     const query = { productName: { $regex: search, $options: "i" } };
 
     const [products, totalProducts] = await Promise.all([
-      productModel.find(query).skip((pageNo - 1) * limit).limit(limit),
+      productModel
+        .find(query)
+        .skip((pageNo - 1) * limit)
+        .limit(limit),
       productModel.countDocuments(query),
     ]);
 
