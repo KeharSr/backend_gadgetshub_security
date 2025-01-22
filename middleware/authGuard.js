@@ -3,14 +3,10 @@ const userModel = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const httpStatus = require("http-status-codes");
-const authGuard = async (req, res, next) => {
-  //check incoming data
-  console.log(req.headers); // passed going to next
 
-  // get authorization data fromheader
+const authGuard = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  // check or validate
   if (!authHeader) {
     return res.status(400).json({
       success: false,
@@ -18,10 +14,7 @@ const authGuard = async (req, res, next) => {
     });
   }
 
-  // Split the data(Format: Bearer token)
   const token = authHeader.split(" ")[1];
-
-  // if token not found : stop the process (res)
   if (!token || token === "") {
     return res.status(400).json({
       success: false,
@@ -29,7 +22,6 @@ const authGuard = async (req, res, next) => {
     });
   }
 
-  // verify
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await userModel.findById(decoded.id);
@@ -39,24 +31,20 @@ const authGuard = async (req, res, next) => {
         message: "User not found",
       });
     }
-    req.user = decoded;
+    req.user = user;
     next();
   } catch (error) {
-    res.status(500).json({
-      sucess: false,
-      message: "Not Authorized",
+    console.error("Auth guard error:", error.message);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid token",
     });
   }
-  // if verified : next (function is controller)
-
-  // not verified : not auth
 };
 
-// Admin guard
 const adminGuard = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -66,7 +54,6 @@ const adminGuard = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await userModel.findById(decoded.id);
-
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -81,16 +68,22 @@ const adminGuard = async (req, res, next) => {
       });
     }
 
-    req.user = user; // Attach the user to the request object for further use
+    req.user = user;
     next();
   } catch (error) {
-    console.error("Admin guard error:", error);
-    return res.status(500).json({
+    console.error("Admin guard error:", error.message);
+    return res.status(401).json({
       success: false,
-      message: "Internal server error",
+      message: error.message === "invalid signature" ? "Invalid token signature" : "Authorization failed",
     });
   }
 };
+
+module.exports = {
+  authGuard,
+  adminGuard,
+};
+
 
 const verifyRecaptcha = async (req, res, next) => {
   console.log("Incoming reCAPTCHA Token: ", req.body.recaptchaToken); // Log the token received in the request body
