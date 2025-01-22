@@ -38,6 +38,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  passwordHistory: {
+    type: [String], // Array of hashed passwords
+    default: [],
+  },
 
   isAdmin: {
     type: Boolean,

@@ -79,10 +79,6 @@ const adminGuard = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  authGuard,
-  adminGuard,
-};
 
 
 const verifyRecaptcha = async (req, res, next) => {

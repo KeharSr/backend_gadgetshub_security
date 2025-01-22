@@ -36,11 +36,7 @@ router.put('/update',authGuard, userController.editUserProfile);
 // update password
 router.put('/update_password',authGuard, userController.updatePassword);
 
-router.get("/check-admin", adminGuard, (req, res) => {
-    res.status(200).json({
-      success: true,
-      isAdmin: true,
-    });
-  });
+
+router.get("/check-admin", adminGuard, userController.checkAdmin);
 
 module.exports = router

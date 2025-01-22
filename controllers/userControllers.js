@@ -125,20 +125,6 @@ const createUser = async (req, res) => {
   }
 };
 
-// generate access token 
-const generateAccessToken = (user) => {
-  return jwt.sign({ id: user._id, isAdmin:user.isAdmin }, process.env.JWT_SECRET, {
-    expiresIn: "5m",
-  });
-};
-
-// generate refresh token
-const generateRefreshToken = (user) => {
-  return jwt.sign({ id: user._id, isAdmin:user.isAdmin }, process.env.REFRESH_SECRET, {
-    expiresIn: "7d",
-  });
-};
-
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
 
@@ -255,29 +241,21 @@ const loginUser = async (req, res) => {
     user.loginOTPExpires = null;
     await user.save();
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
-
-    user.refreshToken = refreshToken;
-    await user.save();
-
     // Create a clean JWT payload (exclude isAdmin)
-    // const tokenPayload = {
-    //   id: user._id, // Include only necessary fields
-    //   email: user.email,
-    //   name: user.name, // Optional
-    // };
+    const tokenPayload = {
+      id: user._id, // Include only necessary fields
+      email: user.email,
+      name: user.name, // Optional
+    };
 
-    // const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-    //   expiresIn: "1h",
-    // });
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
 
     return res.status(200).json({
       success: true,
       message: "User Logged in Successfully!",
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      // token: token,
+      token: token,
       userData: {
         id: user._id,
         email: user.email,
@@ -289,44 +267,6 @@ const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
-    });
-  }
-};
-
-// refresh token
-const refreshToken = async (req, res) => {
-  const { refreshToken } = req.body;
-
-  if (!refreshToken) {
-    return res.status(401).json({
-      success: false,
-      message: "Refresh token is required",
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
-
-    const user = await userModel.findById(decoded.id);
-
-    if (!user || user.refreshToken !== refreshToken) {
-      return res.status(403).json({
-        success: false,
-        message: "Invalid refresh token",
-      });
-    }
-
-    const newAccessToken = generateAccessToken(user);
-
-    return res.status(200).json({
-      success: true,
-      accessToken: newAccessToken,
-    });
-  } catch (error) {
-    console.error("Error refreshing token:", error.message);
-    return res.status(403).json({
-      success: false,
-      message: "Invalid or expired refresh token",
     });
   }
 };
@@ -595,24 +535,33 @@ const forgotPassword = async (req, res) => {
 
 const verifyOtpAndResetPassword = async (req, res) => {
   const { phoneNumber, otp, password } = req.body;
+
   if (!phoneNumber || !otp || !password) {
     return res.status(400).json({
       success: false,
       message: "Please enter all fields",
     });
   }
+
   try {
     const user = await userModel.findOne({ phoneNumber: phoneNumber });
 
-    //Verify OTP
-    if (user.resetPasswordOTP != otp) {
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Verify OTP
+    if (user.resetPasswordOTP !== parseInt(otp)) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
       });
     }
 
-    //Check if OTP is expired
+    // Check if OTP is expired
     if (user.resetPasswordExpires < Date.now()) {
       return res.status(400).json({
         success: false,
@@ -620,27 +569,45 @@ const verifyOtpAndResetPassword = async (req, res) => {
       });
     }
 
-    //Hash the password
-    const randomSalt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, randomSalt);
+    // Check if the new password matches any in the history
+    for (const oldPassword of user.passwordHistory) {
+      const isPasswordReused = await bcrypt.compare(password, oldPassword);
+      if (isPasswordReused) {
+        return res.status(400).json({
+          success: false,
+          message: "New password cannot be the same as any previously used passwords",
+        });
+      }
+    }
 
-    //update to database
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Update password and password history
+    user.passwordHistory.push(user.password); // Add current password to history
+    if (user.passwordHistory.length > 5) {
+      user.passwordHistory.shift(); // Keep only the last 5 passwords
+    }
+
     user.password = hashedPassword;
+    user.resetPasswordOTP = null; // Clear OTP
+    user.resetPasswordExpires = null; // Clear OTP expiry
     await user.save();
 
-    //Send response
     res.status(200).json({
       success: true,
       message: "Password reset successfully",
     });
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({
+    console.error("Error in verifyOtpAndResetPassword:", error);
+    res.status(500).json({
       success: false,
       message: "Internal server error",
     });
   }
 };
+
 
 const uploadProfilePicture = async (req, res) => {
   // const id = req.user.id;
@@ -744,41 +711,25 @@ const editUserProfile = async (req, res) => {
 const checkAdmin = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication token missing",
-      });
+      return res.status(401).json({ message: "Authentication token missing" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await userModel.findById(decoded.id);
+    const user = await User.findById(decoded.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      return res.status(404).json({ message: "User not found" });
     }
 
     if (!user.isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied! Admin privileges required.",
-      });
+      return res.status(403).json({ message: "Access denied" });
     }
 
-    return res.status(200).json({
-      success: true,
-      isAdmin: true,
-    });
+    return res.status(200).json({ isAdmin: true });
   } catch (error) {
-    console.error("Check admin error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Invalid or expired token",
-    });
+    console.error("Error in checkAdmin controller:", error.message);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -805,6 +756,7 @@ const updatePassword = async (req, res) => {
       });
     }
 
+    // Verify the current password
     const isCurrentPasswordValid = await bcrypt.compare(
       currentPassword,
       user.password
@@ -817,6 +769,18 @@ const updatePassword = async (req, res) => {
       });
     }
 
+    // Check if the new password matches any previous password in the history
+    for (const oldPassword of user.passwordHistory) {
+      const isPasswordReused = await bcrypt.compare(newPassword, oldPassword);
+      if (isPasswordReused) {
+        return res.status(400).json({
+          success: false,
+          message: "New password cannot be the same as any of the previous passwords",
+        });
+      }
+    }
+
+    // Validate new password strength
     const passwordRegex =
       /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
     if (!passwordRegex.test(newPassword)) {
@@ -827,11 +791,20 @@ const updatePassword = async (req, res) => {
       });
     }
 
+    // Hash the new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    // Update the password and maintain the password history
+    user.passwordHistory.push(user.password); // Add the current password to history
     user.password = hashedPassword;
-    user.passwordUpdatedAt = Date.now(); // Update the timestamp
+    user.passwordChangedAt = Date.now();
+
+    // Limit the password history to the last 5 passwords
+    if (user.passwordHistory.length > 5) {
+      user.passwordHistory.shift(); // Remove the oldest password
+    }
+
     await user.save();
 
     res.status(200).json({
@@ -846,6 +819,43 @@ const updatePassword = async (req, res) => {
     });
   }
 };
+
+const getPasswordHistory = async (req, res) => {
+  const { phoneNumber } = req.body;
+
+  if (!phoneNumber) {
+    return res.status(400).json({
+      success: false,
+      message: "Phone number is required",
+    });
+  }
+
+  try {
+    // Find the user by phone number
+    const user = await userModel.findOne({ phoneNumber }).select("passwordHistory");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Respond with the password history
+    res.status(200).json({
+      success: true,
+      passwordHistory: user.passwordHistory,
+    });
+  } catch (error) {
+    console.error("Error fetching password history:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
 
 
 
@@ -863,4 +873,6 @@ module.exports = {
   verifyLoginOTP,
   checkAdmin,
   updatePassword,
+  getPasswordHistory,
+
 };
