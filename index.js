@@ -50,6 +50,7 @@ app.use("/api/order", require("./routes/orderRoutes"));
 app.use("/api/review", require("./routes/review&ratingRoutes"));
 app.use("/api/favourite", require("./routes/favouritesRoutes"));
 app.use("/api/khalti", require("./routes/paymentRoutes"));
+app.use("/api/logs", require("./routes/logRoutes"));
 
 // Test SSL Endpoint
 app.get("/", (req, res) => {
