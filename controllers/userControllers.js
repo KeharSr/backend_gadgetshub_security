@@ -477,12 +477,12 @@ const getToken = async (req, res) => {
 };
 
 const forgotPassword = async (req, res) => {
-  const { phoneNumber } = req.body;
+  const { email } = req.body;
 
   // Sanitize phone number input
-  const sanitizedPhoneNumber = phoneNumber ? sanitizeInput(phoneNumber) : null;
+  const sanitizedEmail = email ? sanitizeInput(email) : null;
 
-  if (!sanitizedPhoneNumber) {
+  if (!sanitizedEmail) {
     return res.status(400).json({
       success: false,
       message: "Please enter your phone number",
@@ -491,7 +491,7 @@ const forgotPassword = async (req, res) => {
 
   try {
     // Finding user by phone number
-    const user = await userModel.findOne({ phoneNumber: sanitizedPhoneNumber });
+    const user = await userModel.findOne({ email: sanitizedEmail });
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -511,7 +511,7 @@ const forgotPassword = async (req, res) => {
     await user.save();
 
     // Send OTP to the registered phone number
-    const isSent = await sendOtp(sanitizedPhoneNumber, otp);
+    const isSent = await sendOtp(sanitizedEmail, otp);
     if (!isSent) {
       return res.status(400).json({
         success: false,
@@ -534,9 +534,9 @@ const forgotPassword = async (req, res) => {
 };
 
 const verifyOtpAndResetPassword = async (req, res) => {
-  const { phoneNumber, otp, password } = req.body;
+  const { email, otp, password } = req.body;
 
-  if (!phoneNumber || !otp || !password) {
+  if (!email || !otp || !password) {
     return res.status(400).json({
       success: false,
       message: "Please enter all fields",
@@ -544,7 +544,7 @@ const verifyOtpAndResetPassword = async (req, res) => {
   }
 
   try {
-    const user = await userModel.findOne({ phoneNumber: phoneNumber });
+    const user = await userModel.findOne({ email: email });
 
     if (!user) {
       return res.status(404).json({
@@ -821,18 +821,18 @@ const updatePassword = async (req, res) => {
 };
 
 const getPasswordHistory = async (req, res) => {
-  const { phoneNumber } = req.body;
+  const { email } = req.body;
 
-  if (!phoneNumber) {
+  if (!email) {
     return res.status(400).json({
       success: false,
-      message: "Phone number is required",
+      message: "email is required",
     });
   }
 
   try {
     // Find the user by phone number
-    const user = await userModel.findOne({ phoneNumber }).select("passwordHistory");
+    const user = await userModel.findOne({ email }).select("passwordHistory");
 
     if (!user) {
       return res.status(404).json({

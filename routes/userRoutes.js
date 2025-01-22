@@ -39,4 +39,7 @@ router.put('/update_password',authGuard, userController.updatePassword);
 
 router.get("/check-admin", adminGuard, userController.checkAdmin);
 
+router.post("/get-password-history", userController.getPasswordHistory);
+
+
 module.exports = router
