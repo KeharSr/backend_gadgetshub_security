@@ -125,6 +125,20 @@ const createUser = async (req, res) => {
   }
 };
 
+// generate access token 
+const generateAccessToken = (user) => {
+  return jwt.sign({ id: user._id, isAdmin:user.isAdmin }, process.env.JWT_SECRET, {
+    expiresIn: "5m",
+  });
+};
+
+// generate refresh token
+const generateRefreshToken = (user) => {
+  return jwt.sign({ id: user._id, isAdmin:user.isAdmin }, process.env.REFRESH_SECRET, {
+    expiresIn: "7d",
+  });
+};
+
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
 
@@ -241,21 +255,29 @@ const loginUser = async (req, res) => {
     user.loginOTPExpires = null;
     await user.save();
 
-    // Create a clean JWT payload (exclude isAdmin)
-    const tokenPayload = {
-      id: user._id, // Include only necessary fields
-      email: user.email,
-      name: user.name, // Optional
-    };
+    const accessToken = generateAccessToken(user);
+    const refreshToken = generateRefreshToken(user);
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    // Create a clean JWT payload (exclude isAdmin)
+    // const tokenPayload = {
+    //   id: user._id, // Include only necessary fields
+    //   email: user.email,
+    //   name: user.name, // Optional
+    // };
+
+    // const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+    //   expiresIn: "1h",
+    // });
 
     return res.status(200).json({
       success: true,
       message: "User Logged in Successfully!",
-      token: token,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      // token: token,
       userData: {
         id: user._id,
         email: user.email,
@@ -267,6 +289,44 @@ const loginUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
+    });
+  }
+};
+
+// refresh token
+const refreshToken = async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      success: false,
+      message: "Refresh token is required",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
+
+    const user = await userModel.findById(decoded.id);
+
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(403).json({
+        success: false,
+        message: "Invalid refresh token",
+      });
+    }
+
+    const newAccessToken = generateAccessToken(user);
+
+    return res.status(200).json({
+      success: true,
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    console.error("Error refreshing token:", error.message);
+    return res.status(403).json({
+      success: false,
+      message: "Invalid or expired refresh token",
     });
   }
 };
