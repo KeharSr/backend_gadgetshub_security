@@ -6,10 +6,7 @@ const router = express.Router();
 const { authGuard, adminGuard } = require('../middleware/authGuard');
 const Log = require("../models/logModel");
 
-// // Example protected route with logging
-// router.get("/protected-route", authGuard, logRequest, (req, res) => {
-//   res.status(200).json({ message: "This is a protected route!" });
-// });
+
 
 // Fetch user activity logs (Admin access only)
 router.get("/activity-logs", adminGuard, async (req, res) => {

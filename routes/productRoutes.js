@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const productController = require("../controllers/productControllers");
 const { authGuard, adminGuard } = require("../middleware/authGuard");
+const { logRequest } = require("../middleware/activityLogs");
 
 // Create a new product
 router.post("/create", adminGuard, productController.createProduct);
@@ -35,6 +36,6 @@ router.get(
 router.get("/pagination", productController.paginatonProducts);
 
 // search products
-router.get("/search", productController.searchProductsByName);
+router.get("/search",logRequest, productController.searchProductsByName);
 
 module.exports = router;
