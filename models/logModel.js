@@ -2,14 +2,17 @@ const mongoose = require("mongoose");
 
 const logSchema = new mongoose.Schema(
   {
-    username: String, // User's email or username
-    url: String,      // The endpoint accessed
-    method: String,   // HTTP method (GET, POST, etc.)
-    role: String,     // User role (Admin, User, etc.)
-    status: String,   // Request status (success, failure)
-    time: Date,       // Time of the request
+    username: String, 
+    url: String,      
+    method: String,   
+    role: String,     
+    status: String,   
+    time: Date,       
+    headers: Object,  
+    device: String,   
+    ipAddress: String 
   },
-  { timestamps: true }
+  { timestamps: true } 
 );
 
 const Log = mongoose.model("Log", logSchema);

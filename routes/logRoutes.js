@@ -3,7 +3,7 @@ const logRequest = require("../middleware/activityLogs");
 const router = express.Router();
 
 // Protect the routes with authentication and apply logging middleware
-const { authGuard, adminGuard } = require('../middleware/authGuard');
+const {adminGuard} = require('../middleware/authGuard');
 const Log = require("../models/logModel");
 
 

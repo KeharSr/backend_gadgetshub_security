@@ -6,6 +6,6 @@ const { logRequest } = require('../middleware/activityLogs');
 
 router.post('/add_favourite', authGuard,logRequest, favoritesController.addFavorite);
 router.delete('/remove_favourite/:id',logRequest, authGuard, favoritesController.removeFavorite);
-router.get('/get_favourite', authGuard, favoritesController.getFavorites);
+router.get('/get_favourite',logRequest, authGuard, favoritesController.getFavorites);
 
 module.exports = router;
