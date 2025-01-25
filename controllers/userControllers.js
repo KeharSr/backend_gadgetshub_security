@@ -1,31 +1,22 @@
 const { response } = require("express");
 const userModel = require("../models/userModel");
+const { checkout } = require("../routes/userRoutes");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const sendOtp = require("../service/sentOtp");
 const path = require("path");
+const User = require("../models/userModel");
 const fs = require("fs");
 const axios = require("axios");
-const DOMPurify = require("dompurify");
-const { JSDOM } = require("jsdom");
+const validator = require("validator");
 const {
   sendVerificationEmail,
   sendLoginOTP,
 } = require("../service/authentication");
 
-// Initialize DOMPurify
-const window = new JSDOM("").window;
-const domPurify = DOMPurify(window);
-
-// Sanitize user input
+// sanitize user input
 const sanitizeInput = (input) => {
-  const sanitizedText = domPurify.sanitize(input.trim());
-  if (!sanitizedText) {
-    throw new Error(
-      "Input cannot be empty or contain only HTML tags. Please provide valid input."
-    );
-  }
-  return sanitizedText;
+  return validator.escape(input.trim());
 };
 
 const createUser = async (req, res) => {
@@ -33,40 +24,49 @@ const createUser = async (req, res) => {
   const { firstName, lastName, userName, email, phoneNumber, password } =
     req.body;
 
+  // Sanitize user input
+  const sanitizedFirstName = sanitizeInput(firstName);
+  const sanitizedLastName = sanitizeInput(lastName);
+  const sanitizedUserName = sanitizeInput(userName);
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedPhoneNumber = sanitizeInput(phoneNumber);
+  const sanitizedPassword = password;
+
+  if (
+    !sanitizedFirstName ||
+    !sanitizedLastName ||
+    !sanitizedUserName ||
+    !sanitizedEmail ||
+    !sanitizedPhoneNumber ||
+    !sanitizedPassword
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter all the fields",
+    });
+  }
+
+  // Password validation
+  const passwordRegex =
+    /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
+  if (!passwordRegex.test(password)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Password must contain at least 8 characters, one capital letter, one number, and one special character!",
+    });
+  }
+
+  // Email validation with "." and "@" in the email
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(sanitizedEmail)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid email address",
+    });
+  }
+
   try {
-    // Sanitize user input
-    const sanitizedFirstName = sanitizeInput(firstName);
-    const sanitizedLastName = sanitizeInput(lastName);
-    const sanitizedUserName = sanitizeInput(userName);
-    const sanitizedEmail = sanitizeInput(email);
-    const sanitizedPhoneNumber = sanitizeInput(phoneNumber);
-    const sanitizedPassword = password;
-
-    if (
-      !sanitizedFirstName ||
-      !sanitizedLastName ||
-      !sanitizedUserName ||
-      !sanitizedEmail ||
-      !sanitizedPhoneNumber ||
-      !sanitizedPassword
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter all the fields",
-      });
-    }
-
-    // Password validation
-    const passwordRegex =
-      /^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{8,}$/;
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must contain at least 8 characters, one capital letter, one number, and one special character!",
-      });
-    }
-
     const existingUserByEmail = await userModel.findOne({
       email: sanitizedEmail,
     });
@@ -91,8 +91,9 @@ const createUser = async (req, res) => {
     const randomSalt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(sanitizedPassword, randomSalt);
 
-    // Generate OTP
+    //Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000);
+    // generate expiry time for OTP
     const otpExpiry = Date.now() + 10 * 60 * 1000;
 
     const newUser = new userModel({
@@ -122,7 +123,7 @@ const createUser = async (req, res) => {
     res.status(201).json({
       success: true,
       message:
-        "User created successfully. Please check your email for verification OTP",
+        "User created successfully.Please check your email for verification OTP",
     });
   } catch (error) {
     console.log(error);
@@ -136,18 +137,17 @@ const createUser = async (req, res) => {
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
 
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedPassword = password;
+
+  if (!sanitizedEmail || !sanitizedPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter all the fields",
+    });
+  }
+
   try {
-    // Sanitize inputs
-    const sanitizedEmail = email ? sanitizeInput(email) : null;
-    const sanitizedPassword = password ? sanitizeInput(password) : null;
-
-    if (!sanitizedEmail || !sanitizedPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter all the fields",
-      });
-    }
-
     const user = await userModel.findOne({ email: sanitizedEmail });
 
     if (!user) {
@@ -166,7 +166,7 @@ const loginUser = async (req, res) => {
     }
 
     // Check if password is expired
-    const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 90 days
     const passwordAge = Date.now() - new Date(user.passwordChangedAt).getTime();
 
     if (passwordAge > passwordExpiryLimit) {
@@ -177,7 +177,7 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Check if user is locked
+    
     if (user.lockUntil && user.lockUntil > Date.now()) {
       return res.status(403).json({
         success: false,
@@ -234,10 +234,7 @@ const loginUser = async (req, res) => {
     }
 
     // Verify OTP
-    if (
-      user.loginOTP !== parseInt(sanitizeInput(otp)) ||
-      user.loginOTPExpires < Date.now()
-    ) {
+    if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired OTP",
@@ -283,23 +280,12 @@ const loginUser = async (req, res) => {
 
 // verifyloginOTP
 const verifyLoginOTP = async (req, res) => {
+  const { email, otp } = req.body;
+
   try {
-    // Sanitize inputs
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : null;
-    const sanitizedOtp = req.body.otp ? sanitizeInput(req.body.otp) : null;
-
-    if (!sanitizedEmail || !sanitizedOtp) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and OTP are required",
-      });
-    }
-
     const user = await userModel.findOne({
-      email: sanitizedEmail,
-      loginOTP: sanitizedOtp,
+      email,
+      loginOTP: otp,
       loginOTPExpires: { $gt: Date.now() },
     });
 
@@ -322,22 +308,17 @@ const verifyLoginOTP = async (req, res) => {
         id: user._id,
         isAdmin: user.isAdmin,
       },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" } // Adjust token expiry as needed
+      process.env.JWT_SECRET
     );
 
     res.status(200).json({
       success: true,
       message: "User Logged in Successfully!",
       token: token,
-      userData: {
-        id: user._id,
-        email: user.email,
-        isAdmin: user.isAdmin,
-      },
+      userData: user,
     });
   } catch (error) {
-    console.error(error);
+    console.log(error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -346,23 +327,12 @@ const verifyLoginOTP = async (req, res) => {
 };
 
 const verifyEmail = async (req, res) => {
+  const { email, otp } = req.body;
+
   try {
-    // Sanitize inputs
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : null;
-    const sanitizedOtp = req.body.otp ? sanitizeInput(req.body.otp) : null;
-
-    if (!sanitizedEmail || !sanitizedOtp) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and OTP are required",
-      });
-    }
-
     const user = await userModel.findOne({
-      email: sanitizedEmail,
-      verificationOTP: sanitizedOtp,
+      email,
+      verificationOTP: otp,
       otpExpires: { $gt: Date.now() },
     });
 
@@ -384,7 +354,7 @@ const verifyEmail = async (req, res) => {
       message: "Email verified successfully",
     });
   } catch (error) {
-    console.error(error);
+    console.log(error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -393,20 +363,10 @@ const verifyEmail = async (req, res) => {
 };
 
 const resendLoginOTP = async (req, res) => {
+  const { email } = req.body;
+
   try {
-    // Sanitize input
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : null;
-
-    if (!sanitizedEmail) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required",
-      });
-    }
-
-    const user = await userModel.findOne({ email: sanitizedEmail });
+    const user = await userModel.findOne({ email });
 
     if (!user) {
       return res.status(400).json({
@@ -422,7 +382,7 @@ const resendLoginOTP = async (req, res) => {
     user.loginOTPExpires = otpExpiry;
     await user.save();
 
-    const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
+    const emailSent = await sendLoginOTP(email, loginOTP);
 
     if (!emailSent) {
       return res.status(500).json({
@@ -436,7 +396,7 @@ const resendLoginOTP = async (req, res) => {
       message: "OTP resent successfully",
     });
   } catch (error) {
-    console.error(error);
+    console.log(error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -524,20 +484,20 @@ const getToken = async (req, res) => {
 };
 
 const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  // Sanitize phone number input
+  const sanitizedEmail = email ? sanitizeInput(email) : null;
+
+  if (!sanitizedEmail) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter your phone number",
+    });
+  }
+
   try {
-    // Sanitize email input
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : null;
-
-    if (!sanitizedEmail) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter your email",
-      });
-    }
-
-    // Finding user by email
+    // Finding user by phone number
     const user = await userModel.findOne({ email: sanitizedEmail });
     if (!user) {
       return res.status(400).json({
@@ -557,7 +517,7 @@ const forgotPassword = async (req, res) => {
     user.resetPasswordExpires = expiry;
     await user.save();
 
-    // Send OTP to the registered email
+    // Send OTP to the registered phone number
     const isSent = await sendOtp(sanitizedEmail, otp);
     if (!isSent) {
       return res.status(400).json({
@@ -581,24 +541,17 @@ const forgotPassword = async (req, res) => {
 };
 
 const verifyOtpAndResetPassword = async (req, res) => {
+  const { email, otp, password } = req.body;
+
+  if (!email || !otp || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Please enter all fields",
+    });
+  }
+
   try {
-    // Sanitize inputs
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : null;
-    const sanitizedOtp = req.body.otp ? sanitizeInput(req.body.otp) : null;
-    const sanitizedPassword = req.body.password
-      ? sanitizeInput(req.body.password)
-      : null;
-
-    if (!sanitizedEmail || !sanitizedOtp || !sanitizedPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter all fields",
-      });
-    }
-
-    const user = await userModel.findOne({ email: sanitizedEmail });
+    const user = await userModel.findOne({ email: email });
 
     if (!user) {
       return res.status(404).json({
@@ -608,7 +561,7 @@ const verifyOtpAndResetPassword = async (req, res) => {
     }
 
     // Verify OTP
-    if (user.resetPasswordOTP !== parseInt(sanitizedOtp)) {
+    if (user.resetPasswordOTP !== parseInt(otp)) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -624,11 +577,8 @@ const verifyOtpAndResetPassword = async (req, res) => {
     }
 
     // Check if the new password matches any in the history
-    for (const oldPassword of user.passwordHistory) {
-      const isPasswordReused = await bcrypt.compare(
-        sanitizedPassword,
-        oldPassword
-      );
+    for (const oldPasswordHash of user.passwordHistory) {
+      const isPasswordReused = await bcrypt.compare(password, oldPasswordHash);
       if (isPasswordReused) {
         return res.status(400).json({
           success: false,
@@ -640,7 +590,7 @@ const verifyOtpAndResetPassword = async (req, res) => {
 
     // Hash the new password
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(sanitizedPassword, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
     // Update password and password history
     user.passwordHistory.push(user.password); // Add current password to history
@@ -667,67 +617,52 @@ const verifyOtpAndResetPassword = async (req, res) => {
 };
 
 const uploadProfilePicture = async (req, res) => {
+  console.log(req.files);
+  const { profilePicture } = req.files;
+
+  if (!profilePicture) {
+    return res.status(400).json({
+      success: false,
+      message: "Please upload an image",
+    });
+  }
+
+  // Validate file type
+  const validImageExtensions = ["jpg", "jpeg", "png"];
+  const fileExtension = path.extname(profilePicture.name).toLowerCase().slice(1);
+
+  if (!validImageExtensions.includes(fileExtension)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid file type. Allowed formats are jpg, jpeg, and png.",
+    });
+  }
+
+  // Generate new image name
+  const imageName = `${Date.now()}-${profilePicture.name}`;
+
+  // Define the upload path
+  const imageUploadPath = path.join(
+    __dirname,
+    `../public/profile_pictures/${imageName}`
+  );
+
+  // Ensure the directory exists
+  const directoryPath = path.dirname(imageUploadPath);
+  fs.mkdirSync(directoryPath, { recursive: true });
+
   try {
-    // Check if files are uploaded
-    if (!req.files || !req.files.profilePicture) {
-      return res.status(400).json({
-        success: false,
-        message: "Please upload an image",
-      });
-    }
+    // Move the image to the upload path
+    await profilePicture.mv(imageUploadPath);
 
-    const { profilePicture } = req.files;
-
-    // Validate file type
-    const allowedExtensions = /(\.jpg|\.jpeg|\.png)$/i;
-    if (!allowedExtensions.test(profilePicture.name)) {
-      return res.status(400).json({
-        success: false,
-        message: "Only JPG and PNG files are allowed",
-      });
-    }
-
-    // Validate file size (e.g., max size 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5 MB
-    if (profilePicture.size > maxSize) {
-      return res.status(400).json({
-        success: false,
-        message: "File size should not exceed 5MB",
-      });
-    }
-
-    // Generate a unique image name
-    const imageName = `${Date.now()}-${profilePicture.name}`;
-
-    // Define upload path
-    const imageUploadPath = path.join(
-      __dirname,
-      `../public/profile_pictures/${imageName}`
-    );
-
-    // Ensure the directory exists
-    const directoryPath = path.dirname(imageUploadPath);
-    fs.mkdirSync(directoryPath, { recursive: true });
-
-    // Move the file to the upload path
-    profilePicture.mv(imageUploadPath, (err) => {
-      if (err) {
-        console.error("Error moving file:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Error uploading the file",
-        });
-      }
-
-      // Return success response
-      res.status(200).json({
-        success: true,
-        message: "Image uploaded successfully",
-        profilePicture: imageName,
-      });
+    // Send the image name to the user
+    res.status(200).json({
+      success: true,
+      message: "Image uploaded successfully",
+      profilePicture: imageName,
     });
   } catch (error) {
-    console.error("Error in uploadProfilePicture:", error);
+    console.error("Error uploading image:", error);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -735,40 +670,41 @@ const uploadProfilePicture = async (req, res) => {
     });
   }
 };
-
-// edit user profile
 const editUserProfile = async (req, res) => {
+  const { firstName, lastName, userName, email, phoneNumber, profilePicture } =
+    req.body;
+  const userId = req.user.id;
+
   try {
-    // Destructure and sanitize inputs
-    const sanitizedFirstName = req.body.firstName
-      ? sanitizeInput(req.body.firstName)
-      : undefined;
-    const sanitizedLastName = req.body.lastName
-      ? sanitizeInput(req.body.lastName)
-      : undefined;
-    const sanitizedUserName = req.body.userName
-      ? sanitizeInput(req.body.userName)
-      : undefined;
-    const sanitizedEmail = req.body.email
-      ? sanitizeInput(req.body.email)
-      : undefined;
-    const sanitizedPhoneNumber = req.body.phoneNumber
-      ? sanitizeInput(req.body.phoneNumber)
-      : undefined;
-    const sanitizedProfilePicture = req.body.profilePicture
-      ? sanitizeInput(req.body.profilePicture)
+    // Helper function to sanitize inputs
+    const sanitizeInput = (input) => input.trim(); // Replace this with your actual sanitization logic
+
+    // Sanitize inputs
+    const sanitizedFirstName = firstName ? sanitizeInput(firstName) : undefined;
+    const sanitizedLastName = lastName ? sanitizeInput(lastName) : undefined;
+    const sanitizedUserName = userName ? sanitizeInput(userName) : undefined;
+    const sanitizedEmail = email ? sanitizeInput(email) : undefined;
+    const sanitizedPhoneNumber = phoneNumber
+      ? sanitizeInput(phoneNumber)
       : undefined;
 
-    const userId = req.user.id;
+    let sanitizedProfilePicture;
 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
+    if (profilePicture) {
+      // Validate profile picture file type
+      const validImageExtensions = ["jpg", "jpeg", "png"];
+      const fileExtension = profilePicture.split(".").pop().toLowerCase();
+
+      if (!validImageExtensions.includes(fileExtension)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid file type for profile picture. Allowed formats are jpg, jpeg, and png.",
+        });
+      }
+
+      sanitizedProfilePicture = sanitizeInput(profilePicture);
     }
 
-    // Find the user
     const user = await User.findById(userId);
 
     if (!user) {
@@ -778,7 +714,7 @@ const editUserProfile = async (req, res) => {
       });
     }
 
-    // Update user fields with sanitized data or retain existing values
+    // Update user fields with sanitized data or keep the existing values
     user.firstName = sanitizedFirstName || user.firstName;
     user.lastName = sanitizedLastName || user.lastName;
     user.userName = sanitizedUserName || user.userName;
@@ -786,7 +722,6 @@ const editUserProfile = async (req, res) => {
     user.phoneNumber = sanitizedPhoneNumber || user.phoneNumber;
     user.profilePicture = sanitizedProfilePicture || user.profilePicture;
 
-    // Save updated user profile
     await user.save();
 
     res.status(200).json({
@@ -803,6 +738,7 @@ const editUserProfile = async (req, res) => {
     });
   }
 };
+
 
 const checkAdmin = async (req, res) => {
   try {
@@ -951,6 +887,10 @@ const getPasswordHistory = async (req, res) => {
     });
   }
 };
+
+//create a function to change password in every 30 days
+
+
 
 module.exports = {
   createUser,

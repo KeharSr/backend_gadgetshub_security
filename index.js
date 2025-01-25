@@ -17,7 +17,7 @@ const { logRequest } = require("./middleware/activityLogs");
 dotenv.config();
 const app = express();
 
-// Updated CORS Configuration
+//  CORS Configuration
 const corsOptions = {
   origin: [process.env.FRONTEND_URL || "https://localhost:3000"],
   credentials: true,
