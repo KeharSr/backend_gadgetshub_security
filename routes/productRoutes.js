@@ -10,28 +10,16 @@ router.post("/create", adminGuard,logRequest, productController.createProduct);
 router.get("/get_all_products", productController.getAllProducts);
 
 // Get products by category
-router.get(
-  "/get_products_by_category/",logRequest,
-  productController.getProductsByCategory
-);
+router.get("/get_products_by_category/",logRequest, productController.getProductsByCategory);
 
 // Delete a product (protected route with adminGuard middleware)
-router.delete(
-  "/delete_product/:id",
-  adminGuard,
-  productController.deleteProduct
-);
+router.delete("/delete_product/:id",adminGuard,productController.deleteProduct);
 
 // Update a product
 router.put("/update_product/:id", adminGuard,logRequest, productController.updateProduct);
 
 // Get a single product by ID (protected route with authGuard middleware)
-router.get(
-  "/get_single_product/:id",
-  logRequest,
-  authGuard,
-  productController.getSingleProduct
-);
+router.get("/get_single_product/:id",logRequest,authGuard,productController.getSingleProduct);
 
 // Pagination example route
 router.get("/pagination",logRequest, productController.paginatonProducts);
@@ -40,3 +28,4 @@ router.get("/pagination",logRequest, productController.paginatonProducts);
 router.get("/search",logRequest, productController.searchProductsByName);
 
 module.exports = router;
+

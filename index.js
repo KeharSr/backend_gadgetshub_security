@@ -35,21 +35,18 @@ app.use(cors(corsOptions));
 
 app.use(logRequest);
 
-// helemt security 
+// helemt security
 app.use(helmet());
 
 // morgan tiny
 app.use(morgan("tiny"));
 
-
-
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 5,
   message: "Too many requests from this IP, please try again after 15 minutes",
 });
 app.use(limiter);
-
 
 // API request limit
 app.use(express.json({ limit: "50mb" }));
@@ -57,8 +54,6 @@ app.use(express.json({ limit: "50mb" }));
 // Body parser and file upload
 app.use(express.json());
 app.use(fileUpload());
-
-
 
 // Mongo sanitization
 app.use(mongoSanitize());
