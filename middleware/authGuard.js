@@ -2,8 +2,6 @@
 const userModel = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const httpStatus = require("http-status-codes");
-
 
 const authGuard = async (req, res, next) => {
   const authHeader = req.headers.authorization;

@@ -5,10 +5,10 @@ const { authGuard,verifyRecaptcha, adminGuard } = require('../middleware/authGua
 const {logRequest} = require('../middleware/activityLogs');
 
 
-router.post('/create', userController.createUser)
+router.post('/create',logRequest, userController.createUser)
 
 
-router.post('/login',verifyRecaptcha, userController.loginUser)
+router.post('/login',verifyRecaptcha,logRequest, userController.loginUser)
 
 // verify login otp
 router.post('/verify-login-otp', userController.verifyLoginOTP)
@@ -23,7 +23,7 @@ router.get('/current',logRequest, userController.getCurrentUser)
 router.post('/token', userController.getToken)
 
 // forgot password
-router.post('/forgot_password', userController.forgotPassword);
+router.post('/forgot_password',logRequest, userController.forgotPassword);
 
 // verify otp and reset password
 router.post('/verify_otp', userController.verifyOtpAndResetPassword);
@@ -40,7 +40,7 @@ router.put('/update_password',authGuard, userController.updatePassword);
 
 router.get("/check-admin", adminGuard, userController.checkAdmin);
 
-router.post("/get-password-history", userController.getPasswordHistory);
+router.post("/get-password-history",logRequest, userController.getPasswordHistory);
 
 
 module.exports = router

@@ -134,11 +134,158 @@ const createUser = async (req, res) => {
   }
 };
 
+// const loginUser = async (req, res) => {
+//   const { email, password, otp } = req.body;
+
+//   const sanitizedEmail = sanitizeInput(email);
+//   const sanitizedPassword = password;
+
+//   if (!sanitizedEmail || !sanitizedPassword) {
+//     return res.status(400).json({
+//       success: false,
+//       message: "Please enter all the fields",
+//     });
+//   }
+
+//   try {
+//     const user = await userModel.findOne({ email: sanitizedEmail });
+
+//     if (!user) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Email Doesn't Exist!",
+//       });
+//     }
+
+//     // Check if email is verified
+//     if (!user.isVerified) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Please verify your email first",
+//       });
+//     }
+
+//     // Check if password is expired
+//     const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 90 days
+//     const passwordAge = Date.now() - new Date(user.passwordChangedAt).getTime();
+
+//     if (passwordAge > passwordExpiryLimit) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Password has expired. Please reset your password",
+//         requirePasswordReset: true,
+//       });
+//     }
+
+    
+//     if (user.lockUntil && user.lockUntil > Date.now()) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Account is temporarily locked. Please try again later.",
+//       });
+//     }
+
+//     const isValidPassword = await bcrypt.compare(
+//       sanitizedPassword,
+//       user.password
+//     );
+
+//     if (!isValidPassword) {
+//       // Increment failed login attempts
+//       user.loginAttempts = (user.loginAttempts || 0) + 1;
+
+//       if (user.loginAttempts >= 5) {
+//         user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
+//         user.loginAttempts = 0;
+//       }
+
+//       await user.save();
+
+//       return res.status(400).json({
+//         success: false,
+//         message: "Password Doesn't Match!",
+//       });
+//     }
+
+//     // If OTP is not provided, generate and send new OTP
+//     if (!otp) {
+//       const loginOTP = Math.floor(100000 + Math.random() * 900000);
+//       const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+
+//       user.loginOTP = loginOTP;
+//       user.loginOTPExpires = otpExpiry;
+//       await user.save();
+
+//       // Send OTP email
+//       const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
+
+//       if (!emailSent) {
+//         return res.status(500).json({
+//           success: false,
+//           message: "Failed to send OTP",
+//         });
+//       }
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "OTP sent to your email",
+//         requireOTP: true,
+//       });
+//     }
+
+//     // Verify OTP
+//     if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid or expired OTP",
+//       });
+//     }
+
+//     // Reset login attempts and clear OTP
+//     user.loginAttempts = 0;
+//     user.lockUntil = undefined;
+//     user.loginOTP = null;
+//     user.loginOTPExpires = null;
+//     await user.save();
+
+//     // Create a clean JWT payload (exclude isAdmin)
+//     const tokenPayload = {
+//       id: user._id, // Include only necessary fields
+//       email: user.email,
+//       name: user.name, // Optional
+//     };
+
+//     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
+//       expiresIn: "1h",
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "User Logged in Successfully!",
+//       token: token,
+//       userData: {
+//         id: user._id,
+//         email: user.email,
+//         name: user.name, // Include only non-sensitive user data
+//       },
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal Server Error",
+//     });
+//   }
+// };
+
+// verifyloginOTP
+
 const loginUser = async (req, res) => {
   const { email, password, otp } = req.body;
 
   const sanitizedEmail = sanitizeInput(email);
   const sanitizedPassword = password;
+  const sanitizedOtp = otp ? sanitizeInput(otp) : null;
 
   if (!sanitizedEmail || !sanitizedPassword) {
     return res.status(400).json({
@@ -157,7 +304,6 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Check if email is verified
     if (!user.isVerified) {
       return res.status(403).json({
         success: false,
@@ -165,11 +311,13 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Check if password is expired
-    const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 90 days
-    const passwordAge = Date.now() - new Date(user.passwordChangedAt).getTime();
+    const passwordChangedAt = user.passwordChangedAt
+      ? new Date(user.passwordChangedAt).getTime()
+      : 0;
+    const passwordAge = Date.now() - passwordChangedAt;
+    const passwordExpiryLimit = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-    if (passwordAge > passwordExpiryLimit) {
+    if (passwordAge > passwordExpiryLimit && passwordChangedAt !== 0) {
       return res.status(403).json({
         success: false,
         message: "Password has expired. Please reset your password",
@@ -177,7 +325,6 @@ const loginUser = async (req, res) => {
       });
     }
 
-    
     if (user.lockUntil && user.lockUntil > Date.now()) {
       return res.status(403).json({
         success: false,
@@ -191,15 +338,15 @@ const loginUser = async (req, res) => {
     );
 
     if (!isValidPassword) {
-      // Increment failed login attempts
       user.loginAttempts = (user.loginAttempts || 0) + 1;
 
-      if (user.loginAttempts >= 3) {
-        user.lockUntil = Date.now() + 5 * 60 * 1000; // 5 minutes lock
+      if (user.loginAttempts >= 5) {
+        user.lockUntil = Date.now() + 5 * 60 * 1000; // Lock account for 5 minutes
         user.loginAttempts = 0;
       }
 
       await user.save();
+      console.warn(`Failed login attempt for user ${user.email}`);
 
       return res.status(400).json({
         success: false,
@@ -207,16 +354,20 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // If OTP is not provided, generate and send new OTP
-    if (!otp) {
+    if (!sanitizedOtp) {
+      if (user.lastOtpRequestTime && Date.now() - user.lastOtpRequestTime < 60000) {
+        return res.status(429).json({
+          success: false,
+          message: "Too many OTP requests. Please wait before trying again.",
+        });
+      }
+
       const loginOTP = Math.floor(100000 + Math.random() * 900000);
-      const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
-
       user.loginOTP = loginOTP;
-      user.loginOTPExpires = otpExpiry;
-      await user.save();
+      user.loginOTPExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+      user.lastOtpRequestTime = Date.now();
 
-      // Send OTP email
+      await user.save();
       const emailSent = await sendLoginOTP(sanitizedEmail, loginOTP);
 
       if (!emailSent) {
@@ -233,44 +384,41 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // Verify OTP
-    if (user.loginOTP !== parseInt(otp) || user.loginOTPExpires < Date.now()) {
+    if (user.loginOTP !== parseInt(sanitizedOtp) || user.loginOTPExpires < Date.now()) {
       return res.status(400).json({
         success: false,
         message: "Invalid or expired OTP",
       });
     }
 
-    // Reset login attempts and clear OTP
     user.loginAttempts = 0;
     user.lockUntil = undefined;
     user.loginOTP = null;
     user.loginOTPExpires = null;
+    user.lastLoginAt = Date.now();
     await user.save();
 
-    // Create a clean JWT payload (exclude isAdmin)
-    const tokenPayload = {
-      id: user._id, // Include only necessary fields
-      email: user.email,
-      name: user.name, // Optional
-    };
-
+    const tokenPayload = { id: user._id };
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
       expiresIn: "1h",
+    });
+    const refreshToken = jwt.sign(tokenPayload, process.env.JWT_REFRESH_SECRET, {
+      expiresIn: "7d",
     });
 
     return res.status(200).json({
       success: true,
       message: "User Logged in Successfully!",
-      token: token,
+      token,
+      refreshToken,
       userData: {
         id: user._id,
         email: user.email,
-        name: user.name, // Include only non-sensitive user data
+        name: user.name,
       },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Error logging in user:", error.message);
     return res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -278,7 +426,7 @@ const loginUser = async (req, res) => {
   }
 };
 
-// verifyloginOTP
+
 const verifyLoginOTP = async (req, res) => {
   const { email, otp } = req.body;
 
@@ -748,7 +896,7 @@ const checkAdmin = async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id); // Find the user by ID
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
