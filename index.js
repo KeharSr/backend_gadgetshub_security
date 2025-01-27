@@ -33,7 +33,6 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-app.use(logRequest);
 
 // helemt security
 app.use(helmet());

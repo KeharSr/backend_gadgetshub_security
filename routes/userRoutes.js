@@ -1,46 +1,50 @@
-const router = require('express').Router();
-const userController = require('../controllers/userControllers')
-const { authGuard,verifyRecaptcha, adminGuard } = require('../middleware/authGuard');
+const router = require("express").Router();
+const userController = require("../controllers/userControllers");
+const {
+  authGuard,
+  verifyRecaptcha,
+  adminGuard,
+} = require("../middleware/authGuard");
 
-const {logRequest} = require('../middleware/activityLogs');
+const { logRequest } = require("../middleware/activityLogs");
 
+router.post("/create", userController.createUser);
 
-router.post('/create',logRequest, userController.createUser)
-
-
-router.post('/login',verifyRecaptcha,logRequest, userController.loginUser)
+router.post("/login", verifyRecaptcha, logRequest, userController.loginUser);
 
 // verify login otp
-router.post('/verify-login-otp', userController.verifyLoginOTP)
+router.post("/verify-login-otp", userController.verifyLoginOTP);
 
-router.post('/verify-email', userController.verifyEmail)
+router.post("/verify-email", userController.verifyEmail);
 
-router.post('/resend-login-otp', userController.resendLoginOTP);
+router.post("/resend-login-otp", userController.resendLoginOTP);
 
 // current user
-router.get('/current',logRequest, userController.getCurrentUser)
+router.get("/current", authGuard, logRequest, userController.getCurrentUser);
 
-router.post('/token', userController.getToken)
+router.post("/token", userController.getToken);
 
 // forgot password
-router.post('/forgot_password',logRequest, userController.forgotPassword);
+router.post("/forgot_password", logRequest, userController.forgotPassword);
 
 // verify otp and reset password
-router.post('/verify_otp', userController.verifyOtpAndResetPassword);
+router.post("/verify_otp", userController.verifyOtpAndResetPassword);
 
 // upload profile picture
-router.post('/profile_picture',logRequest,userController.uploadProfilePicture);
+router.post("/profile_picture", authGuard, userController.uploadProfilePicture);
 
 // update user details
-router.put('/update',authGuard,logRequest, userController.editUserProfile);
+router.put("/update", authGuard, userController.editUserProfile);
 
 // update password
-router.put('/update_password',authGuard, userController.updatePassword);
-
+router.put("/update_password", authGuard, userController.updatePassword);
 
 router.get("/check-admin", adminGuard, userController.checkAdmin);
 
-router.post("/get-password-history",logRequest, userController.getPasswordHistory);
+router.post(
+  "/get-password-history",
 
+  userController.getPasswordHistory
+);
 
-module.exports = router
+module.exports = router;
