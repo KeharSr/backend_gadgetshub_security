@@ -154,7 +154,6 @@ const completeKhaltiPayment = async (req, res) => {
   }
 };
 
-
 // Route to verify Khalti payment (used for debugging or manual verification)
 const verifyKhalti = async (req, res) => {
   const { pidx, amount, purchase_order_id } = req.query;
@@ -204,6 +203,8 @@ const verifyKhalti = async (req, res) => {
     });
   }
 };
+
+// if the payment is not sucessful, then
 
 module.exports = {
   initializePayment,

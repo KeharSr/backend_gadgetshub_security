@@ -12,6 +12,7 @@ const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const xssClean = require("xss-clean");
+const morgan = require("morgan");
 
 dotenv.config();
 const app = express();
@@ -32,11 +33,14 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// open public folder
+app.use(express.static("public"));
+
 // helemt security
-// app.use(helmet());
+app.use(helmet());
 
 // // morgan tiny
-// app.use(morgan("tiny"));
+app.use(morgan("tiny"));
 
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000,
