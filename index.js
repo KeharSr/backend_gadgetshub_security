@@ -13,6 +13,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 const { logRequest } = require("./middleware/activityLogs");
+const xssClean = require("xss-clean");
 
 dotenv.config();
 const app = express();
@@ -33,9 +34,8 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-
 // helemt security
-app.use(helmet());
+// app.use(helmet());
 
 // morgan tiny
 app.use(morgan("tiny"));
@@ -56,6 +56,8 @@ app.use(fileUpload());
 
 // Mongo sanitization
 app.use(mongoSanitize());
+
+// app.use(xssClean());
 
 // Database Connection
 Database();

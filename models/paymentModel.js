@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const paymentSchema = new mongoose.Schema(
   {
-    transactionId: { type: String, unique: true , },
+    transactionId: { type: String, unique: true },
     pidx: { type: String, unique: true },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
