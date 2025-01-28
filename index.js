@@ -11,8 +11,6 @@ const path = require("path");
 const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const morgan = require("morgan");
-const { logRequest } = require("./middleware/activityLogs");
 const xssClean = require("xss-clean");
 
 dotenv.config();
@@ -37,8 +35,8 @@ app.use(cors(corsOptions));
 // helemt security
 // app.use(helmet());
 
-// morgan tiny
-app.use(morgan("tiny"));
+// // morgan tiny
+// app.use(morgan("tiny"));
 
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000,
@@ -57,7 +55,7 @@ app.use(fileUpload());
 // Mongo sanitization
 app.use(mongoSanitize());
 
-// app.use(xssClean());
+app.use(xssClean());
 
 // Database Connection
 Database();
