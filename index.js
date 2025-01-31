@@ -13,6 +13,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const xssClean = require("xss-clean");
 const morgan = require("morgan");
+const { checkPayment } = require("./controllers/paymentControllers");
 
 dotenv.config();
 const app = express();
@@ -60,6 +61,7 @@ app.use(fileUpload());
 app.use(mongoSanitize());
 
 app.use(xssClean());
+
 
 // Database Connection
 Database();

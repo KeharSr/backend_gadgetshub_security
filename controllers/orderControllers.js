@@ -1,11 +1,21 @@
+
+
 const orderModel = require("../models/orderModel");
 const validator = require("validator"); // Import validator library
 const { encryptText, decryptText } = require("../utils/encryptionUtils");
+const DOMPurify = require("dompurify");
+const { JSDOM } = require("jsdom");
+
+// Create a DOM environment for DOMPurify
+const window = new JSDOM("").window;
+const purify = DOMPurify(window);
 
 // Utility function to sanitize input
 const sanitizeInput = (input) => {
   if (typeof input === "string") {
-    return validator.escape(input.trim());
+    let cleanInput = purify.sanitize(input); // Remove any HTML tags
+    cleanInput = validator.escape(cleanInput.trim()); // Escape remaining characters
+    return cleanInput;
   }
   return input; // Return non-string inputs as-is
 };
@@ -29,6 +39,8 @@ const placeOrder = async (req, res) => {
       payment,
     } = req.body;
 
+    console.log("carts", carts);
+
     // Sanitize inputs and encrypt sensitive fields
     const sanitizedName = encryptText(sanitizeInput(name));
     const sanitizedEmail = encryptText(sanitizeInput(email));
@@ -39,6 +51,8 @@ const placeOrder = async (req, res) => {
     const sanitizedCountry = encryptText(sanitizeInput(country));
     const sanitizedPhone = encryptText(sanitizeInput(phone));
     const sanitizedTotalPrice = parseFloat(totalPrice);
+
+    
 
     if (!carts || carts.length === 0) {
       return res
