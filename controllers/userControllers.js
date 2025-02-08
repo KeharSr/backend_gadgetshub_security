@@ -197,7 +197,7 @@ const loginUser = async (req, res) => {
     if (!isValidPassword) {
       user.loginAttempts = (user.loginAttempts || 0) + 1;
 
-      if (user.loginAttempts >= 5) {
+      if (user.loginAttempts >= 3) {
         user.lockUntil = Date.now() + 5 * 60 * 1000; // Lock account for 5 minutes
         user.loginAttempts = 0;
       }
